@@ -36,6 +36,27 @@ function M() {
     return (global as any).Hydro.model as Record<string, any>;
 }
 
+async function readJsonBodyIfNeeded(req: any): Promise<any | null> {
+    // Koa usually populates req.body via middleware, but we also support a fallback.
+    return await new Promise((resolve) => {
+        let data = '';
+        try {
+            req.on('data', (chunk: any) => { data += chunk?.toString?.('utf8') ?? String(chunk); });
+            req.on('end', () => {
+                if (!data.trim()) return resolve(null);
+                try {
+                    resolve(JSON.parse(data));
+                } catch {
+                    resolve(null);
+                }
+            });
+            req.on('error', () => resolve(null));
+        } catch {
+            resolve(null);
+        }
+    });
+}
+
 const contestOnlyQuery = { rule: { $ne: 'homework' } };
 const homeworkQuery = { rule: 'homework' };
 
@@ -53,7 +74,10 @@ class RestLoginHandler extends Handler {
     @param('username', Types.String)
     @param('password', Types.String)
     async post(domainId: string, username?: string, password?: string) {
-        const src = (this.request.body || this.request.query) as any;
+        let src = (this.request.body || this.request.query) as any;
+        if (!src || typeof src !== 'object') {
+            src = await readJsonBodyIfNeeded(this.request);
+        }
         const un = username ?? src?.username;
         const pw = password ?? src?.password;
 

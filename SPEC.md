@@ -6,7 +6,7 @@
 
 ### Overview
 
-This repository provides a HydroOJ addon that exposes **read-only** HTTP APIs under `/rest-api/`, plus `GET /rest-api/login` to obtain a JWT. A TypeScript CLI under `cli/ts/` can call these APIs. Code submission and contest or homework registration are out of scope; use the web UI or Hydro’s native mechanisms.
+This repository provides a HydroOJ addon that exposes **read-only** HTTP APIs under `/rest-api/`, plus `POST /rest-api/login` to obtain a JWT. A TypeScript CLI under `cli/ts/` can call these APIs. Code submission and contest or homework registration are out of scope; use the web UI or Hydro’s native mechanisms.
 
 ### Architecture
 
@@ -89,7 +89,7 @@ Except for login, authenticated routes use **GET only** and are read-only. There
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/rest-api/login?username=X&password=Y` | Public | Returns JWT |
+| POST | `/rest-api/login` | Public | Returns JWT (JSON body: `{username,password}`) |
 
 #### Problems
 
@@ -153,7 +153,7 @@ Authorization: Bearer <token>
 
 ### 概述
 
-本仓库包含一个 HydroOJ 插件，在 **`/rest-api/`** 下提供**只读** HTTP 接口，并通过 `GET /rest-api/login` 签发 JWT。`cli/ts/` 中的 TypeScript 命令行可作为调用示例或客户端。代码提交、比赛与作业报名不在此 REST 范围内，请使用 Web 端或 Hydro 原生流程。
+本仓库包含一个 HydroOJ 插件，在 **`/rest-api/`** 下提供**只读** HTTP 接口，并通过 `POST /rest-api/login` 签发 JWT。`cli/ts/` 中的 TypeScript 命令行可作为调用示例或客户端。代码提交、比赛与作业报名不在此 REST 范围内，请使用 Web 端或 Hydro 原生流程。
 
 ### 架构
 
@@ -236,7 +236,7 @@ hydrooj-cli help
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
-| GET | `/rest-api/login?username=X&password=Y` | 无需 | 返回 JWT |
+| POST | `/rest-api/login` | 无需 | 返回 JWT（JSON body: `{username,password}`） |
 
 #### 题目
 
