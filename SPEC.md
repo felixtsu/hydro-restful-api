@@ -41,9 +41,9 @@ hydro-restful-api/
 │   ├── index.ts              # Addon entry: `apply`, route registration (loaded by Hydro)
 │   └── routes.ts             # Route handlers (parallel module; entry is `index.ts`)
 ├── cli/ts/
-│   ├── package.json          # npm package `hydrooj-rest-cli`, bin `hydrooj-rest`
+│   ├── package.json          # npm package `hydrooj-cli`, bin `hydrooj-cli`
 │   ├── tsconfig.json
-│   ├── bin/hydrooj-rest.js   # Launcher → dist/
+│   ├── bin/hydrooj-cli.js    # Launcher → dist/
 │   ├── index.ts              # CLI source
 │   └── dist/                 # Build output (gitignored); created by `npm run build`
 ├── scripts/
@@ -72,9 +72,9 @@ Manual / Development:
 **CLI**
 
 ```bash
-npm install -g hydrooj-rest-cli   # after publish; or: cd cli/ts && npm run build && npm link
-hydrooj-rest login
-hydrooj-rest help
+npm install -g hydrooj-cli   # after publish; or: cd cli/ts && npm run build && npm link
+hydrooj-cli login
+hydrooj-cli help
 ```
 
 `help` also documents `homework-detail`, `homework-problems`, `contest-detail`, and `contest-problems` (each takes an id).
@@ -188,9 +188,9 @@ hydro-restful-api/
 │   ├── index.ts              # 插件入口：`apply`、路由注册（由 Hydro 加载）
 │   └── routes.ts             # 路由处理实现（与 `index.ts` 并列；入口为 `index.ts`）
 ├── cli/ts/
-│   ├── package.json          # npm 包 `hydrooj-rest-cli`，命令 `hydrooj-rest`
+│   ├── package.json          # npm 包 `hydrooj-cli`，命令 `hydrooj-cli`
 │   ├── tsconfig.json
-│   ├── bin/hydrooj-rest.js
+│   ├── bin/hydrooj-cli.js
 │   ├── index.ts
 │   └── dist/                 # `npm run build` 生成（gitignore）
 ├── scripts/
@@ -219,9 +219,9 @@ hydrooj addon add hydrooj-rest-api
 **命令行**
 
 ```bash
-npm install -g hydrooj-rest-cli   # 发布后；或源码：cd cli/ts && npm run build && npm link
-hydrooj-rest login
-hydrooj-rest help
+npm install -g hydrooj-cli   # 发布后；或源码：cd cli/ts && npm run build && npm link
+hydrooj-cli login
+hydrooj-cli help
 ```
 
 `help` 中亦说明 `homework-detail`、`homework-problems`、`contest-detail`、`contest-problems`（均需传入 id）。

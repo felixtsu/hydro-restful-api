@@ -1,5 +1,5 @@
 {
-  "name": "hydrooj-rest-cli",
+  "name": "hydrooj-cli",
   "version": "1.0.0",
   "description": "CLI client for the hydrooj-rest-api HydroOJ addon (read-only REST)",
   "license": "MIT",
@@ -24,7 +24,7 @@
     "node": ">=18"
   },
   "bin": {
-    "hydrooj-rest": "bin/hydrooj-rest.js"
+    "hydrooj-cli": "bin/hydrooj-cli.js"
   },
   "main": "dist/index.js",
   "files": [

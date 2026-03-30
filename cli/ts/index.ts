@@ -48,7 +48,7 @@ function loadConfigWithSource(): { baseUrl: string; source: string } {
   if (fromEnv) return { baseUrl: fromEnv, source: 'environment (HYDRO_API_URL)' };
   return {
     baseUrl: '',
-    source: 'not set — run: hydrooj-rest config base-url <url> or set HYDRO_API_URL',
+    source: 'not set — run: hydrooj-cli config base-url <url> or set HYDRO_API_URL',
   };
 }
 
@@ -57,7 +57,7 @@ function requireBaseUrl(baseUrl: string): string {
   if (!u) {
     console.error('No base URL configured. This CLI only works against a Hydro site that has the hydrooj-rest-api server addon installed.');
     console.error('Set your OJ site root, for example:');
-    console.error('  hydrooj-rest config base-url https://your-oj.example.com');
+    console.error('  hydrooj-cli config base-url https://your-oj.example.com');
     console.error('Or set the environment variable HYDRO_API_URL.');
     console.error('If the site uses /d/<domain>/ in the browser, include that path in the URL.');
     process.exit(1);
@@ -122,7 +122,7 @@ function saveSession(token: string): void {
 
 function requireToken(token: string | null): string {
   if (!token) {
-    console.error('Not logged in. Run "hydrooj-rest login" first.');
+    console.error('Not logged in. Run "hydrooj-cli login" first.');
     process.exit(1);
   }
   return token;
@@ -362,14 +362,14 @@ function printHelp(): void {
   console.log(`HydroOJ REST CLI (TypeScript)
 
 First-time setup (your Hydro server needs the hydrooj-rest-api addon):
-  hydrooj-rest config base-url https://your-oj.example.com
+  hydrooj-cli config base-url https://your-oj.example.com
 
 Usage:
-  hydrooj-rest <command> [args]
-  (after: npm install -g hydrooj-rest-cli)
+  hydrooj-cli <command> [args]
+  (after: npm install -g hydrooj-cli)
 
 Dev / from source:
-  cd cli/ts && npm run build && node bin/hydrooj-rest.js <command> [args]
+  cd cli/ts && npm run build && node bin/hydrooj-cli.js <command> [args]
 
 Commands:
   config                Show effective base URL and where it comes from
@@ -451,7 +451,7 @@ async function main() {
       if (sub === 'base-url' || sub === 'base_url') {
         const url = args[2];
         if (!url) {
-          console.error('Usage: hydrooj-rest config base-url <url>');
+          console.error('Usage: hydrooj-cli config base-url <url>');
           process.exit(1);
         }
         try {
@@ -475,7 +475,7 @@ async function main() {
       await listProblems(apiBase, requireToken(token), {});
       break;
     case 'show':
-      if (!args[1]) { console.error('Usage: hydrooj-rest show <problem_id>'); process.exit(1); }
+      if (!args[1]) { console.error('Usage: hydrooj-cli show <problem_id>'); process.exit(1); }
       await showProblem(apiBase, requireToken(token), args[1]);
       break;
     case 'status':
@@ -488,19 +488,19 @@ async function main() {
       await listContests(apiBase, requireToken(token));
       break;
     case 'homework-detail':
-      if (!args[1]) { console.error('Usage: hydrooj-rest homework-detail <homework_id>'); process.exit(1); }
+      if (!args[1]) { console.error('Usage: hydrooj-cli homework-detail <homework_id>'); process.exit(1); }
       await homeworkDetail(apiBase, requireToken(token), args[1]);
       break;
     case 'homework-problems':
-      if (!args[1]) { console.error('Usage: hydrooj-rest homework-problems <homework_id>'); process.exit(1); }
+      if (!args[1]) { console.error('Usage: hydrooj-cli homework-problems <homework_id>'); process.exit(1); }
       await homeworkProblems(apiBase, requireToken(token), args[1]);
       break;
     case 'contest-detail':
-      if (!args[1]) { console.error('Usage: hydrooj-rest contest-detail <contest_id>'); process.exit(1); }
+      if (!args[1]) { console.error('Usage: hydrooj-cli contest-detail <contest_id>'); process.exit(1); }
       await contestDetail(apiBase, requireToken(token), args[1]);
       break;
     case 'contest-problems':
-      if (!args[1]) { console.error('Usage: hydrooj-rest contest-problems <contest_id>'); process.exit(1); }
+      if (!args[1]) { console.error('Usage: hydrooj-cli contest-problems <contest_id>'); process.exit(1); }
       await contestProblems(apiBase, requireToken(token), args[1]);
       break;
     default:
