@@ -16,7 +16,7 @@ A read-only RESTful interface for [HydroOJ](https://github.com/hydro-dev/Hydro),
 ### Features
 
 - **Read-only Access**: Securely expose problems, submissions, homework, and contests.
-- **JWT Authentication**: Industry-standard token-based security via `/rest-api/login`.
+- **JWT Authentication**: Industry-standard token-based security via `POST /rest-api/login`.
 - **Companion CLI**: A full-featured Node.js CLI tool for terminal-based OJ interaction.
 - **Lightweight Addon**: Runs directly within the HydroOJ process without extra ports.
 
@@ -100,7 +100,7 @@ Detailed API specifications, including all endpoints and parameters, are availab
 ### 功能特性
 
 - **只读访问**：安全地暴露题目、提交记录、作业和比赛数据。
-- **JWT 认证**：通过 `/rest-api/login` 提供标准的令牌化安全认证。
+- **JWT 认证**：通过 `POST /rest-api/login` 提供标准的令牌化安全认证。
 - **配套 CLI**：功能完备的 Node.js 命令行工具，支持终端交互。
 - **轻量插件**：直接在 HydroOJ 进程内运行，无需额外端口。
 
