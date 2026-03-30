@@ -18,12 +18,14 @@ A read-only RESTful interface for [HydroOJ](https://github.com/hydro-dev/Hydro),
 - **Companion CLI**: A full-featured Node.js CLI tool for terminal-based OJ interaction.
 - **Lightweight Addon**: Runs directly within the HydroOJ process without extra ports.
 
-### Components
+### Components (two separate deliverables)
 
 | Component | Role | Location |
 |-----------|------|----------|
-| **Server Addon** | Core service providing REST endpoints. | `addon/` |
-| **CLI Client** | Terminal tool for end-users. | `cli/ts/` |
+| **Server addon** | Runs **inside** the HydroOJ Node process. Registers **`/rest-api/*`** (read-only data + `GET /rest-api/login` for JWT). **Only the Hydro server** needs this. | `addon/` (npm: [`hydrooj-rest-api`](https://www.npmjs.com/package/hydrooj-rest-api)) |
+| **CLI client** | Node.js **18+** tool for **students, teachers, or scripts**. Talks to your site over HTTPS; stores a token under `~/.config/hydrooj_cli/`. Command: **`hydrooj-rest`**. | `cli/ts/` (npm: [`hydrooj-rest-cli`](https://www.npmjs.com/package/hydrooj-rest-cli)) |
+
+These are **two npm packages** with independent versions. Publish or upgrade them separately.
 
 ### Quick Start
 
@@ -37,18 +39,29 @@ npm install hydrooj-rest-api
 hydrooj addon add hydrooj-rest-api
 ```
 
-**Development / Local Installation**:
-1. Clone this repository and link the addon:
+**Development / local install**
+
+1. Clone this repo and link the addon into your Hydro tree (see also [Hydro plugins](https://docs.hydro.ac/docs/Hydro/plugins)):
    ```bash
    cd addon && npm link
    cd /path/to/hydrooj && npm link hydrooj-rest-api
    ```
-2. **Security**: Configure your `JWT_SECRET` (see [Security](#security)).
-3. **Restart**: Restart HydroOJ to apply the changes.
+2. **Security**: Set `JWT_SECRET` (see [Security](#security)).
+3. **Restart** HydroOJ.
 
-#### 2. Client Setup (CLI)
+**CLI from source** (no global publish needed):
 
-Install globally via npm:
+```bash
+cd cli/ts && npm install && npm run build && npm link
+hydrooj-rest help
+```
+
+Configure `~/.config/hydrooj_cli/config.json` with `baseUrl` / `base_url`, or set **`HYDRO_API_URL`**. If your site uses `/d/<domain>/` in the browser, include that path in the base URL.
+
+#### 2. Client setup (CLI)
+
+After the package is published:
+
 ```bash
 npm install -g hydrooj-rest-cli
 hydrooj-rest login
@@ -81,12 +94,14 @@ Detailed API specifications, including all endpoints and parameters, are availab
 - **配套 CLI**：功能完备的 Node.js 命令行工具，支持终端交互。
 - **轻量插件**：直接在 HydroOJ 进程内运行，无需额外端口。
 
-### 核心组件
+### 核心组件（两个独立交付物）
 
 | 组件 | 角色 | 路径 |
 |------|------|------|
-| **服务端插件 (Addon)** | 提供 REST 接口的核心服务。 | `addon/` |
-| **命令行客户端 (CLI)** | 面向终端用户的工具。 | `cli/ts/` |
+| **服务端插件** | 跑在 **HydroOJ 的 Node 进程内**，注册 **`/rest-api/*`**（只读数据 + `GET /rest-api/login` 发 JWT）。**只有跑 Hydro 的机器**需要装。 | `addon/`（npm：`hydrooj-rest-api`） |
+| **CLI 客户端** | **Node 18+** 终端工具，供学生/教师或脚本使用；令牌存 `~/.config/hydrooj_cli/`。命令：**`hydrooj-rest`**。 | `cli/ts/`（npm：`hydrooj-rest-cli`） |
+
+二者是 **两个 npm 包**，版本可分别发布、升级。
 
 ### 快速开始
 
@@ -100,18 +115,29 @@ npm install hydrooj-rest-api
 hydrooj addon add hydrooj-rest-api
 ```
 
-**本地开发安装**:
-1. 拉取仓库并手动链接插件：
+**本地开发安装**
+
+1. 克隆仓库并把插件链入 Hydro（详见 [Hydro 插件](https://docs.hydro.ac/docs/Hydro/plugins)）：
    ```bash
    cd addon && npm link
    cd /path/to/hydrooj && npm link hydrooj-rest-api
    ```
-2. **安全配置**：设置 `JWT_SECRET` 环境变量（详见 [安全配置](#安全配置)）。
-3. **重启**：重启 HydroOJ 以加载插件。
+2. **安全**：配置 `JWT_SECRET`（见 [安全配置](#安全配置)）。
+3. **重启** HydroOJ。
+
+**从源码运行 CLI**（无需先发 npm）：
+
+```bash
+cd cli/ts && npm install && npm run build && npm link
+hydrooj-rest help
+```
+
+在 `~/.config/hydrooj_cli/config.json` 中配置 `baseUrl` / `base_url`，或设置环境变量 **`HYDRO_API_URL`**。若站点 URL 带 `/d/某域/`，请写进 base URL。
 
 #### 2. 客户端配置 (CLI)
 
-通过 npm 全局安装：
+发布后全局安装：
+
 ```bash
 npm install -g hydrooj-rest-cli
 hydrooj-rest login
@@ -135,14 +161,20 @@ openssl rand -base64 32
 
 ---
 
-## Development & Publishing
+## Development & publishing
 
-### NPM Publishing
-To publish the components independently:
+### Publishing to npm (maintainers)
 
-1. **Update Metadata**: Ensure `package.json` in `addon/` and `cli/ts/` has correct repository URLs.
-2. **Build CLI**: `cd cli/ts && npm run build`.
-3. **Publish**: Run `npm publish` in the respective directories.
+Two packages: **`hydrooj-rest-api`** (`addon/`) and **`hydrooj-rest-cli`** (`cli/ts/`).
+
+1. **Account** — Register at [npmjs.com](https://www.npmjs.com/), then `npm login`. With 2FA enabled, use an [access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) for CI.
+2. **Metadata** — In each `package.json`, keep `repository`, `bugs`, and `homepage` accurate (this repo points at `github.com/felixtsu/hydro-restful-api`).
+3. **Version** — Bump `version` (semver) in the package you are releasing before every publish.
+4. **CLI** — From `cli/ts/`, `npm publish`. The `prepublishOnly` script runs `npm run build` so `dist/` is up to date. Verify with `npm install -g hydrooj-rest-cli@<version>` and `hydrooj-rest help`.
+5. **Addon** — From `addon/`, `npm publish`. On Hydro hosts, install with `npm install hydrooj-rest-api@<version>` or `hydrooj addon add hydrooj-rest-api` as in [Quick Start](#english).
+6. **Name conflicts** — If an unscoped name is taken, use e.g. `@your-org/hydrooj-rest-api` and publish with `npm publish --access public`.
+
+Hydro’s plugin model is documented under [Plugins](https://docs.hydro.ac/docs/Hydro/plugins).
 
 ### Contributing
 Contributions are welcome! Please ensure any new API endpoints are documented in `SPEC.md` and supported in the CLI.
