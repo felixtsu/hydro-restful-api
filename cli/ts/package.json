@@ -1,0 +1,42 @@
+{
+  "name": "hydrooj-rest-cli",
+  "version": "1.0.0",
+  "description": "CLI client for the hydrooj-rest-api HydroOJ addon (read-only REST)",
+  "license": "MIT",
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/felixtsu/hydro-restful-api.git",
+    "directory": "cli/ts"
+  },
+  "bugs": {
+    "url": "https://github.com/felixtsu/hydro-restful-api/issues"
+  },
+  "homepage": "https://github.com/felixtsu/hydro-restful-api#readme",
+  "keywords": [
+    "hydrooj",
+    "hydro",
+    "oj",
+    "cli",
+    "rest-api"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "hydrooj-rest": "bin/hydrooj-rest.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.7.0"
+  }
+}

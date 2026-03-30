@@ -37,6 +37,17 @@ json_get_token() {
   fi
 }
 
+# 从列表 JSON 取 items[0].id，若无则输出空行
+json_first_item_id() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c "import sys,json; d=json.load(sys.stdin); print(((d.get('items') or [{}])[0] or {}).get('id') or '')"
+  elif command -v jq >/dev/null 2>&1; then
+    jq -r '(.items[0].id // empty)'
+  else
+    die "需要 python3 或 jq 以解析列表 JSON"
+  fi
+}
+
 echo "==> BASE_URL=${BASE_URL}  API_PREFIX=${API_PREFIX:-"(空)"}"
 echo "==> 1) GET /rest-api/login（错误凭据应 401）"
 code=$(curl -sS -o /tmp/rest_login_bad.json -w '%{http_code}' -G "$(api '/rest-api/login')" \
@@ -61,12 +72,16 @@ echo "    token 已获取（长度 ${#TOKEN}）"
 AUTH=( -H "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' )
 
 echo "==> 3) GET /rest-api/problems?page=1&pageSize=2"
-curl -sS "${AUTH[@]}" -G "$(api '/rest-api/problems')" --data-urlencode 'page=1' --data-urlencode 'pageSize=2' | head -c 400
+curl -sS "${AUTH[@]}" -o /tmp/rest_problems.json -G "$(api '/rest-api/problems')" \
+  --data-urlencode 'page=1' --data-urlencode 'pageSize=2'
+head -c 400 /tmp/rest_problems.json
 echo ""
 echo "    …"
 
 echo "==> 4) GET /rest-api/submissions?page=1&pageSize=2"
-curl -sS "${AUTH[@]}" -G "$(api '/rest-api/submissions')" --data-urlencode 'page=1' --data-urlencode 'pageSize=2' | head -c 400
+curl -sS "${AUTH[@]}" -o /tmp/rest_submissions.json -G "$(api '/rest-api/submissions')" \
+  --data-urlencode 'page=1' --data-urlencode 'pageSize=2'
+head -c 400 /tmp/rest_submissions.json
 echo ""
 echo "    …"
 
@@ -76,9 +91,63 @@ echo ""
 echo "    …"
 
 echo "==> 6) GET /rest-api/contests?page=1&pageSize=2（正式比赛，不含 homework）"
-curl -sS "${AUTH[@]}" -G "$(api '/rest-api/contests')" --data-urlencode 'page=1' --data-urlencode 'pageSize=2' | head -c 400
+curl -sS "${AUTH[@]}" -o /tmp/rest_contests.json -G "$(api '/rest-api/contests')" \
+  --data-urlencode 'page=1' --data-urlencode 'pageSize=2'
+head -c 400 /tmp/rest_contests.json
 echo ""
 echo "    …"
+
+echo "==> 7) GET /rest-api/homework/:id 与 /problems（取作业列表首条 id，若无则跳过）"
+curl -sS "${AUTH[@]}" -o /tmp/rest_homework.json -G "$(api '/rest-api/homework')" \
+  --data-urlencode 'page=1' --data-urlencode 'pageSize=1'
+HID=$(json_first_item_id < /tmp/rest_homework.json)
+if [[ -n "$HID" ]]; then
+  echo "    homework id=${HID}"
+  curl -sS "${AUTH[@]}" "$(api "/rest-api/homework/${HID}")" | head -c 400
+  echo ""
+  echo "    …"
+  curl -sS "${AUTH[@]}" "$(api "/rest-api/homework/${HID}/problems")" | head -c 400
+  echo ""
+  echo "    …"
+else
+  echo "    （无作业，跳过）"
+fi
+
+echo "==> 8) GET /rest-api/contests/:id 与 /problems（取比赛列表首条 id，若无则跳过）"
+CID=$(json_first_item_id < /tmp/rest_contests.json)
+if [[ -n "$CID" ]]; then
+  echo "    contest id=${CID}"
+  curl -sS "${AUTH[@]}" "$(api "/rest-api/contests/${CID}")" | head -c 400
+  echo ""
+  echo "    …"
+  curl -sS "${AUTH[@]}" "$(api "/rest-api/contests/${CID}/problems")" | head -c 400
+  echo ""
+  echo "    …"
+else
+  echo "    （无正式比赛，跳过）"
+fi
+
+echo "==> 9) GET /rest-api/problems/:id（取题目列表首条 id，若无则跳过）"
+PID=$(json_first_item_id < /tmp/rest_problems.json)
+if [[ -n "$PID" ]]; then
+  echo "    problem id=${PID}"
+  curl -sS "${AUTH[@]}" "$(api "/rest-api/problems/${PID}")" | head -c 400
+  echo ""
+  echo "    …"
+else
+  echo "    （无题目，跳过）"
+fi
+
+echo "==> 10) GET /rest-api/submissions/:id（取提交列表首条 id，若无则跳过）"
+SID=$(json_first_item_id < /tmp/rest_submissions.json)
+if [[ -n "$SID" ]]; then
+  echo "    submission id=${SID}"
+  curl -sS "${AUTH[@]}" "$(api "/rest-api/submissions/${SID}")" | head -c 400
+  echo ""
+  echo "    …"
+else
+  echo "    （无提交记录，跳过）"
+fi
 
 echo "==> 完成。若为 JSON 片段而非整页 HTML，addon 基本正常。"
 echo "    若 404，可试: export API_PREFIX='/d/system'"

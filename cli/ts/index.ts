@@ -1,9 +1,9 @@
-#!/usr/bin/env node
 /**
  * HydroOJ CLI - TypeScript/Node.js client for HydroOJ REST API addon
  */
 import * as readline from 'readline';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
@@ -16,7 +16,7 @@ interface Session {
   token: string;
 }
 
-const CONFIG_DIR = path.join(process.env.HOME || '', '.config', 'hydrooj_cli');
+const CONFIG_DIR = path.join(os.homedir(), '.config', 'hydrooj_cli');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const SESSION_FILE = path.join(CONFIG_DIR, 'session.json');
 
@@ -52,6 +52,14 @@ function loadSession(): string | null {
 function saveSession(token: string): void {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
   fs.writeFileSync(SESSION_FILE, JSON.stringify({ token }), { mode: 0o600 });
+}
+
+function requireToken(token: string | null): string {
+  if (!token) {
+    console.error('Not logged in. Run "hydrooj-rest login" first.');
+    process.exit(1);
+  }
+  return token;
 }
 
 function apiRequest(baseUrl: string, apiPath: string, method: string = 'GET', body?: object, token?: string | null): Promise<any> {
@@ -103,9 +111,11 @@ function apiRequest(baseUrl: string, apiPath: string, method: string = 'GET', bo
       }
     };
 
-    const req = lib.request(options, (res) => {
+    const req = lib.request(options, (res: http.IncomingMessage) => {
       let data = '';
-      res.on('data', (chunk) => data += chunk);
+      res.on('data', (chunk: Buffer | string) => {
+        data += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+      });
       res.on('end', () => {
         const status = res.statusCode ?? 0;
         const raw = data.trim();
@@ -129,7 +139,7 @@ function apiRequest(baseUrl: string, apiPath: string, method: string = 'GET', bo
       });
     });
 
-    req.on('error', (e) => safeReject(e instanceof Error ? e : new Error(String(e))));
+    req.on('error', (e: Error) => safeReject(e instanceof Error ? e : new Error(String(e))));
     req.on('timeout', () => {
       req.destroy();
       safeReject(new Error('Request timed out after 30s'));
@@ -246,11 +256,50 @@ async function listContests(baseUrl: string, token: string): Promise<void> {
   }
 }
 
+function formatContestLike(label: string, data: any): void {
+  console.log(`\n${label} [${data.id}]: ${data.title}`);
+  console.log(`Rule: ${data.rule}  Status: ${data.status}`);
+  console.log(`Start: ${data.startAt}  End: ${data.endAt}`);
+  if (data.description) console.log(`\n${data.description}`);
+  const pids = data.problems || [];
+  if (pids.length) console.log(`\nProblem ids (pids): ${pids.join(', ')}`);
+}
+
+async function homeworkDetail(baseUrl: string, token: string, id: string): Promise<void> {
+  const data = await apiRequest(baseUrl, `/rest-api/homework/${id}`, 'GET', undefined, token);
+  formatContestLike('Homework', data);
+}
+
+async function homeworkProblems(baseUrl: string, token: string, id: string): Promise<void> {
+  const data = await apiRequest(baseUrl, `/rest-api/homework/${id}/problems`, 'GET', undefined, token);
+  console.log(`\nHomework problems (${(data.items || []).length})`);
+  for (const p of data.items || []) {
+    console.log(`  [#${p.pid}] ${p.title}`);
+  }
+}
+
+async function contestDetail(baseUrl: string, token: string, id: string): Promise<void> {
+  const data = await apiRequest(baseUrl, `/rest-api/contests/${id}`, 'GET', undefined, token);
+  formatContestLike('Contest', data);
+}
+
+async function contestProblems(baseUrl: string, token: string, id: string): Promise<void> {
+  const data = await apiRequest(baseUrl, `/rest-api/contests/${id}/problems`, 'GET', undefined, token);
+  console.log(`\nContest problems (${(data.items || []).length})`);
+  for (const p of data.items || []) {
+    console.log(`  [#${p.pid}] ${p.title}`);
+  }
+}
+
 function printHelp(): void {
   console.log(`HydroOJ REST CLI (TypeScript)
 
 Usage:
-  npx ts-node index.ts <command> [args]
+  hydrooj-rest <command> [args]
+  (after: npm install -g hydrooj-rest-cli)
+
+Dev / from source:
+  cd cli/ts && npm run build && node bin/hydrooj-rest.js <command> [args]
 
 Commands:
   login                 Sign in; token is saved for later commands
@@ -258,7 +307,24 @@ Commands:
   show <id>             Print problem statement and samples
   status [submissionId] Recent submissions, or one submission detail
   homework              List homework (Hydro rule=homework)
+  homework-detail <id>  Homework metadata (not full problem statements)
+  homework-problems <id>  Problems in a homework
   contests              List contests only (excludes homework)
+  contest-detail <id>   Contest metadata
+  contest-problems <id> Problems in a contest
+
+REST endpoints (reference; list routes accept page, pageSize; problems list also tag, difficulty, keyword):
+  /rest-api/login?username=&password=
+  /rest-api/problems?page=&pageSize=&tag=&difficulty=&keyword=
+  /rest-api/problems/:id
+  /rest-api/submissions?page=&pageSize=
+  /rest-api/submissions/:id
+  /rest-api/homework?page=&pageSize=
+  /rest-api/homework/:id
+  /rest-api/homework/:id/problems
+  /rest-api/contests?page=&pageSize=
+  /rest-api/contests/:id
+  /rest-api/contests/:id/problems
 
 Help:
   help, -h, --help      Show this text
@@ -297,25 +363,36 @@ async function main() {
       await login(baseUrl);
       break;
     case 'list':
-      if (!token) { console.error('Not logged in. Run "hydrooj login" first.'); process.exit(1); }
-      await listProblems(baseUrl, token, {});
+      await listProblems(baseUrl, requireToken(token), {});
       break;
     case 'show':
-      if (!token) { console.error('Not logged in. Run "hydrooj login" first.'); process.exit(1); }
-      if (!args[1]) { console.error('Usage: hydrooj show <problem_id>'); process.exit(1); }
-      await showProblem(baseUrl, token, args[1]);
+      if (!args[1]) { console.error('Usage: hydrooj-rest show <problem_id>'); process.exit(1); }
+      await showProblem(baseUrl, requireToken(token), args[1]);
       break;
     case 'status':
-      if (!token) { console.error('Not logged in. Run "hydrooj login" first.'); process.exit(1); }
-      await showStatus(baseUrl, token, args[1]);
+      await showStatus(baseUrl, requireToken(token), args[1]);
       break;
     case 'homework':
-      if (!token) { console.error('Not logged in. Run "hydrooj login" first.'); process.exit(1); }
-      await listHomework(baseUrl, token);
+      await listHomework(baseUrl, requireToken(token));
       break;
     case 'contests':
-      if (!token) { console.error('Not logged in. Run "hydrooj login" first.'); process.exit(1); }
-      await listContests(baseUrl, token);
+      await listContests(baseUrl, requireToken(token));
+      break;
+    case 'homework-detail':
+      if (!args[1]) { console.error('Usage: hydrooj-rest homework-detail <homework_id>'); process.exit(1); }
+      await homeworkDetail(baseUrl, requireToken(token), args[1]);
+      break;
+    case 'homework-problems':
+      if (!args[1]) { console.error('Usage: hydrooj-rest homework-problems <homework_id>'); process.exit(1); }
+      await homeworkProblems(baseUrl, requireToken(token), args[1]);
+      break;
+    case 'contest-detail':
+      if (!args[1]) { console.error('Usage: hydrooj-rest contest-detail <contest_id>'); process.exit(1); }
+      await contestDetail(baseUrl, requireToken(token), args[1]);
+      break;
+    case 'contest-problems':
+      if (!args[1]) { console.error('Usage: hydrooj-rest contest-problems <contest_id>'); process.exit(1); }
+      await contestProblems(baseUrl, requireToken(token), args[1]);
       break;
     default:
       console.error(`Unknown command: ${cmd}`);
