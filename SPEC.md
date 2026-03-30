@@ -54,15 +54,18 @@ hydrooj_rest_api/
 
 **Server (addon)**
 
-1. Copy `addon/` to the HydroOJ host and install or link it like other Hydro addons.
+Standard installation (recommended):
+```bash
+# In your HydroOJ project directory
+npm install hydrooj-rest-api
+# Or via HydroOJ CLI
+hydrooj addon add hydrooj-rest-api
+```
+
+Manual / Development:
+1. Copy `addon/` to the HydroOJ host or use `npm link`.
 2. Set `JWT_SECRET` to a strong, random value.
 3. Restart HydroOJ.
-
-```bash
-cd /path/to/hydrooj
-npm link /path/to/hydrooj_rest_api/addon
-# or clone/copy the addon into the addons directory per your setup
-```
 
 **CLI**
 
@@ -192,15 +195,18 @@ hydrooj_rest_api/
 
 **服务端（插件）**
 
+标准安装（推荐）：
+```bash
+# 在你的 HydroOJ 项目目录下
+npm install hydrooj-rest-api
+# 或通过 HydroOJ 命令行工具
+hydrooj addon add hydrooj-rest-api
+```
+
+手动 / 开发安装：
 1. 将 `addon/` 部署到 HydroOJ 所在环境，按常规方式安装或链接插件。
 2. 将 `JWT_SECRET` 设为足够长的随机密钥。
 3. 重启 HydroOJ。
-
-```bash
-cd /path/to/hydrooj
-npm link /path/to/hydrooj_rest_api/addon
-# 或按你的环境将插件目录放入 addons 等位置
-```
 
 **命令行**
 

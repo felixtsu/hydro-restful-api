@@ -31,7 +31,7 @@ These are **two npm packages** with independent versions. Publish or upgrade the
 
 #### 1. Server Setup (Addon)
 
-**Standard Installation** (once published to npm):
+**Standard Installation** (from npm):
 ```bash
 # In your HydroOJ project directory
 npm install hydrooj-rest-api
@@ -59,8 +59,6 @@ hydrooj-rest help
 Configure `~/.config/hydrooj_cli/config.json` with `baseUrl` / `base_url`, or set **`HYDRO_API_URL`**. If your site uses `/d/<domain>/` in the browser, include that path in the base URL.
 
 #### 2. Client setup (CLI)
-
-After the package is published:
 
 ```bash
 npm install -g hydrooj-rest-cli
@@ -107,7 +105,7 @@ Detailed API specifications, including all endpoints and parameters, are availab
 
 #### 1. 服务端配置 (Addon)
 
-**标准安装** (发布至 npm 后):
+**标准安装** (从 npm 安装):
 ```bash
 # 在你的 HydroOJ 项目目录下
 npm install hydrooj-rest-api
@@ -136,7 +134,7 @@ hydrooj-rest help
 
 #### 2. 客户端配置 (CLI)
 
-发布后全局安装：
+全局安装：
 
 ```bash
 npm install -g hydrooj-rest-cli
