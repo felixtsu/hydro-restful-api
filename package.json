@@ -1,0 +1,14 @@
+{
+  "name": "hydro-restful-api-monorepo",
+  "private": true,
+  "description": "Monorepo for HydroOJ REST API addon and CLI client",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/felixtsu/hydro-restful-api.git"
+  },
+  "workspaces": [
+    "addon",
+    "cli/ts"
+  ]
+}
