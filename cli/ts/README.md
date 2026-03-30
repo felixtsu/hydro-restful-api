@@ -7,6 +7,4 @@ npm install -g hydrooj-rest-cli
 hydrooj-rest help
 ```
 
-Full documentation lives in the [repository root README](https://github.com/OWNER/hydrooj_rest_api).
-
-Replace `OWNER` with your GitHub org/user after you publish.
+Full documentation lives in the [repository root README](https://github.com/felixtsu/hydro-restful-api).
