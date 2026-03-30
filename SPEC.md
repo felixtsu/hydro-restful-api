@@ -32,8 +32,10 @@ This repository provides a HydroOJ addon that exposes **read-only** HTTP APIs un
 
 ### Repository layout
 
+Source repository: **`github.com/felixtsu/hydro-restful-api`** (local clone directory name may differ).
+
 ```
-hydrooj_rest_api/
+hydro-restful-api/
 ├── addon/
 │   ├── package.json
 │   ├── index.ts              # Addon entry: `apply`, route registration (loaded by Hydro)
@@ -177,14 +179,20 @@ Authorization: Bearer <token>
 
 ### 仓库结构
 
+源码仓库：**`github.com/felixtsu/hydro-restful-api`**（本地克隆目录名可不同）。
+
 ```
-hydrooj_rest_api/
+hydro-restful-api/
 ├── addon/
 │   ├── package.json
 │   ├── index.ts              # 插件入口：`apply`、路由注册（由 Hydro 加载）
 │   └── routes.ts             # 路由处理实现（与 `index.ts` 并列；入口为 `index.ts`）
 ├── cli/ts/
-│   └── index.ts              # 命令行客户端
+│   ├── package.json          # npm 包 `hydrooj-rest-cli`，命令 `hydrooj-rest`
+│   ├── tsconfig.json
+│   ├── bin/hydrooj-rest.js
+│   ├── index.ts
+│   └── dist/                 # `npm run build` 生成（gitignore）
 ├── scripts/
 │   └── test-rest-addon.sh
 ├── SPEC.md

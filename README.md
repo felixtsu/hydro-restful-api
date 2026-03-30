@@ -5,6 +5,8 @@
 
 A read-only RESTful interface for [HydroOJ](https://github.com/hydro-dev/Hydro), enabling seamless remote access via a companion CLI client or any HTTP consumer.
 
+**Source:** [github.com/felixtsu/hydro-restful-api](https://github.com/felixtsu/hydro-restful-api) · Maintainer: **[@felixtsu](https://github.com/felixtsu)**
+
 [English](#english) | [简体中文](#简体中文)
 
 ---
@@ -84,6 +86,8 @@ Detailed API specifications, including all endpoints and parameters, are availab
 ---
 
 ## 简体中文
+
+**源码：** [github.com/felixtsu/hydro-restful-api](https://github.com/felixtsu/hydro-restful-api) · 维护者：**[@felixtsu](https://github.com/felixtsu)**
 
 ### 功能特性
 
@@ -166,7 +170,7 @@ openssl rand -base64 32
 Two packages: **`hydrooj-rest-api`** (`addon/`) and **`hydrooj-rest-cli`** (`cli/ts/`).
 
 1. **Account** — Register at [npmjs.com](https://www.npmjs.com/), then `npm login`. With 2FA enabled, use an [access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) for CI.
-2. **Metadata** — In each `package.json`, keep `repository`, `bugs`, and `homepage` accurate (this repo points at `github.com/felixtsu/hydro-restful-api`).
+2. **Metadata** — In each `package.json`, keep `repository`, `bugs`, and `homepage` accurate (owner **felixtsu**: `https://github.com/felixtsu/hydro-restful-api`).
 3. **Version** — Bump `version` (semver) in the package you are releasing before every publish.
 4. **CLI** — From `cli/ts/`, `npm publish`. The `prepublishOnly` script runs `npm run build` so `dist/` is up to date. Verify with `npm install -g hydrooj-rest-cli@<version>` and `hydrooj-rest help`.
 5. **Addon** — From `addon/`, `npm publish`. On Hydro hosts, install with `npm install hydrooj-rest-api@<version>` or `hydrooj addon add hydrooj-rest-api` as in [Quick Start](#english).
