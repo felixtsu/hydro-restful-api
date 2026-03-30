@@ -151,36 +151,6 @@ export function apply(ctx: Context, config: ReturnType<typeof Config>) {
     }
     ctx.Route('rest_problem_detail', '/rest-api/problems/:id', RestProblemDetailHandler);
 
-    ctx.Route('rest_submit', '/rest-api/submit', class extends Handler {
-        async post() {
-            const user = verifyToken(this.request.headers.authorization, jwtSecret);
-            if (!user) {
-                this.response.status = 401;
-                this.response.body = { error: 'UNAUTHORIZED', message: 'Invalid or missing token' };
-                return;
-            }
-            const { problemId, code, language = 'cpp' } = this.request.body as any;
-            if (!problemId || !code) {
-                this.response.body = { error: 'BAD_REQUEST', message: 'problemId and code required' };
-                this.response.status = 400;
-                return;
-            }
-            const pdoc = await M().problem.get('system', problemId);
-            if (!pdoc) {
-                this.response.status = 404;
-                this.response.body = { error: 'NOT_FOUND', message: 'Problem not found' };
-                return;
-            }
-            const rid = await M().record.submit('system', {
-                pid: pdoc.pid,
-                language,
-                code,
-                uid: user.uid,
-            });
-            this.response.body = { id: rid.toString(), status: 'pending' };
-        }
-    });
-
     ctx.Route('rest_submissions', '/rest-api/submissions', class extends Handler {
         async get() {
             const user = verifyToken(this.request.headers.authorization, jwtSecret);
@@ -432,46 +402,4 @@ export function apply(ctx: Context, config: ReturnType<typeof Config>) {
         }
     }
     ctx.Route('rest_homework_problems', '/rest-api/homework/:id/problems', RestHomeworkProblemsHandler);
-
-    class RestContestRegisterHandler extends Handler {
-        @param('id', Types.String)
-        async post(domainId: string, id: string) {
-            const user = verifyToken(this.request.headers.authorization, jwtSecret);
-            if (!user) {
-                this.response.status = 401;
-                this.response.body = { error: 'UNAUTHORIZED', message: 'Invalid or missing token' };
-                return;
-            }
-            const cdoc = await M().contest.get('system', id);
-            if (!cdoc || cdoc.rule === 'homework') {
-                this.response.status = 404;
-                this.response.body = { error: 'NOT_FOUND', message: 'Contest not found' };
-                return;
-            }
-            await M().contest.join('system', id, user.uid);
-            this.response.body = { success: true, message: 'Registered for contest' };
-        }
-    }
-    ctx.Route('rest_contest_register', '/rest-api/contests/:id/register', RestContestRegisterHandler);
-
-    class RestHomeworkRegisterHandler extends Handler {
-        @param('id', Types.String)
-        async post(domainId: string, id: string) {
-            const user = verifyToken(this.request.headers.authorization, jwtSecret);
-            if (!user) {
-                this.response.status = 401;
-                this.response.body = { error: 'UNAUTHORIZED', message: 'Invalid or missing token' };
-                return;
-            }
-            const cdoc = await M().contest.get('system', id);
-            if (!cdoc || cdoc.rule !== 'homework') {
-                this.response.status = 404;
-                this.response.body = { error: 'NOT_FOUND', message: 'Homework not found' };
-                return;
-            }
-            await M().contest.join('system', id, user.uid);
-            this.response.body = { success: true, message: 'Registered for homework' };
-        }
-    }
-    ctx.Route('rest_homework_register', '/rest-api/homework/:id/register', RestHomeworkRegisterHandler);
 }

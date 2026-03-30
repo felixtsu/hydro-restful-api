@@ -69,6 +69,8 @@ npx ts-node index.ts help
 
 All endpoints mount at `/rest-api/` (not `/api/`, which conflicts with Hydro’s built-in `/api/:op` handler).
 
+Authenticated routes are **read-only** (GET only), except that `GET /rest-api/login` issues a JWT. There is no REST submit or contest/homework register in this addon.
+
 ### Authentication
 
 | Method | Path | Auth | Description |
@@ -86,7 +88,6 @@ All endpoints mount at `/rest-api/` (not `/api/`, which conflicts with Hydro’s
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/rest-api/submit` | Bearer | Submit code |
 | GET | `/rest-api/submissions?page=1` | Bearer | List submissions |
 | GET | `/rest-api/submissions/:id` | Bearer | Submission details |
 
@@ -101,7 +102,6 @@ Hydro uses one contest document type: **homework** has `rule: "homework"`; other
 | GET | `/rest-api/homework` | Bearer | List homework |
 | GET | `/rest-api/homework/:id` | Bearer | Homework details |
 | GET | `/rest-api/homework/:id/problems` | Bearer | Homework problems |
-| POST | `/rest-api/homework/:id/register` | Bearer | Register for homework |
 
 ### Contests (excluding homework)
 
@@ -110,7 +110,6 @@ Hydro uses one contest document type: **homework** has `rule: "homework"`; other
 | GET | `/rest-api/contests` | Bearer | List contests (`rule` ≠ `homework`) |
 | GET | `/rest-api/contests/:id` | Bearer | Contest details |
 | GET | `/rest-api/contests/:id/problems` | Bearer | Contest problems |
-| POST | `/rest-api/contests/:id/register` | Bearer | Register for contest |
 
 ## Authentication
 

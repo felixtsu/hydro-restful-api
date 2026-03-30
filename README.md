@@ -1,6 +1,6 @@
 # HydroOJ REST API
 
-Exposes REST API endpoints from HydroOJ for remote CLI access.
+Exposes **read-only** REST endpoints from HydroOJ for remote CLI access (plus `GET /rest-api/login` to obtain a token). Submitting code and contest/homework registration are not exposed here; use the web UI or Hydro’s native APIs for those.
 
 ## Structure
 
@@ -32,15 +32,12 @@ npx ts-node index.ts help
 - `GET /rest-api/login?username=X&password=Y` - Login
 - `GET /rest-api/problems?page=1` - List problems
 - `GET /rest-api/problems/:id` - Problem details
-- `POST /rest-api/submit` - Submit code
 - `GET /rest-api/submissions` - List submissions
 - `GET /rest-api/submissions/:id` - Submission status
 - `GET /rest-api/homework` - List homework (Hydro `rule: homework`)
 - `GET /rest-api/homework/:id` - Homework details
 - `GET /rest-api/homework/:id/problems` - Homework problems
-- `POST /rest-api/homework/:id/register` - Register for homework
 - `GET /rest-api/contests` - List contests only (`rule` ≠ `homework`)
 - `GET /rest-api/contests/:id` - Contest details
-- `POST /rest-api/contests/:id/register` - Register for contest
 
 （使用 `/rest-api` 而非 `/api`，避免与 Hydro 内置 `/api/:op` 冲突。）

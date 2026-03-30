@@ -209,25 +209,6 @@ async function showProblem(baseUrl: string, token: string, id: string): Promise<
   }
 }
 
-async function submit(baseUrl: string, token: string, args: any): Promise<void> {
-  let code: string;
-  if (args.file) {
-    code = fs.readFileSync(args.file, 'utf-8');
-  } else {
-    console.log('Enter code (Ctrl+D to finish):');
-    code = fs.readFileSync('/dev/stdin', 'utf-8');
-  }
-
-  const data = await apiRequest(baseUrl, '/rest-api/submit', 'POST', {
-    problemId: args.problem_id,
-    code,
-    language: args.language || 'cpp',
-  }, token);
-
-  console.log(`Submitted! Submission ID: ${data.id}`);
-  console.log("Use `hydrooj status <id>` to check the result.");
-}
-
 async function showStatus(baseUrl: string, token: string, id?: string): Promise<void> {
   if (!id) {
     const data = await apiRequest(baseUrl, '/rest-api/submissions?page=1&pageSize=20', 'GET', undefined, token);
@@ -275,8 +256,6 @@ Commands:
   login                 Sign in; token is saved for later commands
   list                  List problems (first page, pageSize 20)
   show <id>             Print problem statement and samples
-  submit <id> <file> [language]
-                        Submit a source file (default language: cpp)
   status [submissionId] Recent submissions, or one submission detail
   homework              List homework (Hydro rule=homework)
   contests              List contests only (excludes homework)
@@ -325,11 +304,6 @@ async function main() {
       if (!token) { console.error('Not logged in. Run "hydrooj login" first.'); process.exit(1); }
       if (!args[1]) { console.error('Usage: hydrooj show <problem_id>'); process.exit(1); }
       await showProblem(baseUrl, token, args[1]);
-      break;
-    case 'submit':
-      if (!token) { console.error('Not logged in. Run "hydrooj login" first.'); process.exit(1); }
-      if (!args[1]) { console.error('Usage: hydrooj submit <problem_id> <file> [language]'); process.exit(1); }
-      await submit(baseUrl, token, { problem_id: args[1], file: args[2], language: args[3] });
       break;
     case 'status':
       if (!token) { console.error('Not logged in. Run "hydrooj login" first.'); process.exit(1); }
