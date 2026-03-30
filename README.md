@@ -24,7 +24,7 @@ A read-only RESTful interface for [HydroOJ](https://github.com/hydro-dev/Hydro),
 
 | Component | Role | Location |
 |-----------|------|----------|
-| **Server addon** | Runs **inside** the HydroOJ Node process. Registers **`/rest-api/*`** (read-only data + `GET /rest-api/login` for JWT). **Only the Hydro server** needs this. | `addon/` (npm: [`hydrooj-rest-api`](https://www.npmjs.com/package/hydrooj-rest-api)) |
+| **Server addon** | Runs **inside** the HydroOJ Node process. Registers **`/rest-api/*`** (read-only data + `POST /rest-api/login` for JWT). **Only the Hydro server** needs this. | `addon/` (npm: [`hydrooj-rest-api`](https://www.npmjs.com/package/hydrooj-rest-api)) |
 | **CLI client** | Node.js **18+** tool for **students, teachers, or scripts**. Talks to your site over HTTPS; stores a token under `~/.config/hydrooj_cli/`. Command: **`hydrooj-cli`**. | `cli/ts/` (npm: [`hydrooj-cli`](https://www.npmjs.com/package/hydrooj-cli)) |
 
 These are **two npm packages** with independent versions. Publish or upgrade them separately.
@@ -35,10 +35,15 @@ These are **two npm packages** with independent versions. Publish or upgrade the
 
 **Standard Installation** (from npm):
 ```bash
-# On your Hydro host (global install)
-npm install -g hydrooj-rest-api
-# Or via HydroOJ CLI
-hydrooj addon add hydrooj-rest-api
+# 1) Install into Hydro's home (`~/.hydro`), not globally.
+cd ~/.hydro
+npm install hydrooj-rest-api
+
+# 2) Register the addon by absolute path (the folder that contains package.json):
+ADDON_DIR="$(pwd)/node_modules/hydrooj-rest-api"
+hydrooj addon add "$ADDON_DIR"
+
+# 3) Restart HydroOJ after installing the addon.
 ```
 
 **Development / local install**
@@ -103,7 +108,7 @@ Detailed API specifications, including all endpoints and parameters, are availab
 
 | 组件 | 角色 | 路径 |
 |------|------|------|
-| **服务端插件** | 跑在 **HydroOJ 的 Node 进程内**，注册 **`/rest-api/*`**（只读数据 + `GET /rest-api/login` 发 JWT）。**只有跑 Hydro 的机器**需要装。 | `addon/`（npm：`hydrooj-rest-api`） |
+| **服务端插件** | 跑在 **HydroOJ 的 Node 进程内**，注册 **`/rest-api/*`**（只读数据 + `POST /rest-api/login` 发 JWT）。**只有跑 Hydro 的机器**需要装。 | `addon/`（npm：`hydrooj-rest-api`） |
 | **CLI 客户端** | **Node 18+** 终端工具，供学生/教师或脚本使用；令牌存 `~/.config/hydrooj_cli/`。命令：**`hydrooj-cli`**。 | `cli/ts/`（npm：`hydrooj-cli`） |
 
 二者是 **两个 npm 包**，版本可分别发布、升级。
@@ -114,10 +119,15 @@ Detailed API specifications, including all endpoints and parameters, are availab
 
 **标准安装** (从 npm 安装):
 ```bash
-# 在 Hydro 主机上（全局安装）
-npm install -g hydrooj-rest-api
-# 或通过 HydroOJ 命令行工具
-hydrooj addon add hydrooj-rest-api
+# 1) 进入 Hydro 的 home 目录（`~/.hydro`）安装，不要用 `-g` 全局安装。
+cd ~/.hydro
+npm install hydrooj-rest-api
+
+# 2) 注册时请使用绝对路径（包含 package.json 的目录）：
+ADDON_DIR="$(pwd)/node_modules/hydrooj-rest-api"
+hydrooj addon add "$ADDON_DIR"
+
+# 3) 安装完成后请重启 HydroOJ 使插件生效。
 ```
 
 **本地开发安装**
@@ -179,7 +189,7 @@ Two packages: **`hydrooj-rest-api`** (`addon/`) and **`hydrooj-cli`** (`cli/ts/`
 2. **Metadata** — In each `package.json`, keep `repository`, `bugs`, and `homepage` accurate (owner **felixtsu**: `https://github.com/felixtsu/hydro-restful-api`).
 3. **Version** — Bump `version` (semver) in the package you are releasing before every publish.
 4. **CLI** — From `cli/ts/`, `npm publish`. The `prepublishOnly` script runs `npm run build` so `dist/` is up to date. Verify with `npm install -g hydrooj-cli@<version>` and `hydrooj-cli help`.
-5. **Addon** — From `addon/`, `npm publish`. On Hydro hosts, install with `npm install -g hydrooj-rest-api@<version>` or `hydrooj addon add hydrooj-rest-api` as in [Quick Start](#english).
+5. **Addon** — From `addon/`, `npm publish`. On Hydro hosts, install with `cd ~/.hydro && npm install hydrooj-rest-api@<version>` and register via absolute path as in [Quick Start](#english).
 6. **Name conflicts** — If an unscoped name is taken, use e.g. `@your-org/hydrooj-rest-api` and publish with `npm publish --access public`.
 
 Hydro’s plugin model is documented under [Plugins](https://docs.hydro.ac/docs/Hydro/plugins).

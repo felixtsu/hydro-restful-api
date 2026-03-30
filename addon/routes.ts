@@ -41,18 +41,37 @@ const homeworkQuery = { rule: 'homework' };
 
 // Login handler
 class RestLoginHandler extends Handler {
+    async get() {
+        // Avoid credentials in URL query string.
+        this.response.body = {
+            error: 'BAD_REQUEST',
+            message: 'Use POST /rest-api/login with JSON body {username, password}',
+        };
+        this.response.status = 400;
+    }
+
     @param('username', Types.String)
     @param('password', Types.String)
-    async get(domainId: string, username: string, password: string) {
-        const udoc = await M().user.getByEmail(domainId, username)
-            || await M().user.getByUname(domainId, username);
+    async post(domainId: string, username?: string, password?: string) {
+        const src = (this.request.body || this.request.query) as any;
+        const un = username ?? src?.username;
+        const pw = password ?? src?.password;
+
+        if (!un || !pw) {
+            this.response.body = { error: 'BAD_REQUEST', message: 'username and password required' };
+            this.response.status = 400;
+            return;
+        }
+
+        const udoc = await M().user.getByEmail(domainId, un)
+            || await M().user.getByUname(domainId, un);
         if (!udoc) {
             this.response.body = { error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' };
             this.response.status = 401;
             return;
         }
         try {
-            await udoc.checkPassword(password);
+            await udoc.checkPassword(pw);
         } catch (e) {
             if (!(e instanceof LoginError)) throw e;
             this.response.body = { error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' };

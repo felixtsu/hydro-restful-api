@@ -49,20 +49,22 @@ json_first_item_id() {
 }
 
 echo "==> BASE_URL=${BASE_URL}  API_PREFIX=${API_PREFIX:-"(空)"}"
-echo "==> 1) GET /rest-api/login（错误凭据应 401）"
-code=$(curl -sS -o /tmp/rest_login_bad.json -w '%{http_code}' -G "$(api '/rest-api/login')" \
-  --data-urlencode 'username=nobody' \
-  --data-urlencode 'password=wrong' \
-  -H 'Accept: application/json') || true
+echo "==> 1) POST /rest-api/login（错误凭据应 401）"
+LOGIN_BAD_JSON=$(python3 -c "import json; print(json.dumps({'username':'nobody','password':'wrong'}))")
+code=$(curl -sS -o /tmp/rest_login_bad.json -w '%{http_code}' -X POST "$(api '/rest-api/login')" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  --data "$LOGIN_BAD_JSON") || true
 echo "    HTTP $code  body: $(cat /tmp/rest_login_bad.json)"
 [[ "$code" == "401" ]] || echo "    （若非 401，请检查 BASE_URL / API_PREFIX）"
 
 need_creds
-echo "==> 2) GET /rest-api/login（正确凭据应 200 且含 token）"
-code=$(curl -sS -o /tmp/rest_login_ok.json -w '%{http_code}' -G "$(api '/rest-api/login')" \
-  --data-urlencode "username=${HYDRO_USER}" \
-  --data-urlencode "password=${HYDRO_PASS}" \
-  -H 'Accept: application/json') || true
+echo "==> 2) POST /rest-api/login（正确凭据应 200 且含 token）"
+LOGIN_OK_JSON=$(python3 -c "import json,os; print(json.dumps({'username': os.environ.get('HYDRO_USER',''), 'password': os.environ.get('HYDRO_PASS','')}))")
+code=$(curl -sS -o /tmp/rest_login_ok.json -w '%{http_code}' -X POST "$(api '/rest-api/login')" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  --data "$LOGIN_OK_JSON") || true
 echo "    HTTP $code"
 [[ "$code" == "200" ]] || die "登录失败，响应: $(cat /tmp/rest_login_ok.json)"
 TOKEN=$(json_get_token < /tmp/rest_login_ok.json)

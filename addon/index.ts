@@ -47,12 +47,24 @@ export function apply(ctx: Context, config: ReturnType<typeof Config>) {
     // Login
     ctx.Route('rest_login', '/rest-api/login', class extends Handler {
         async get() {
-            const { username, password } = this.request.query as any;
+            // Avoid credentials in URL query string.
+            this.response.body = {
+                error: 'BAD_REQUEST',
+                message: 'Use POST /rest-api/login with JSON body {username, password}',
+            };
+            this.response.status = 400;
+        }
+
+        async post() {
+            const src = (this.request.body || this.request.query) as any;
+            const { username, password } = src || {};
+
             if (!username || !password) {
                 this.response.body = { error: 'BAD_REQUEST', message: 'username and password required' };
                 this.response.status = 400;
                 return;
             }
+
             const udoc = await M().user.getByEmail('system', username)
                 || await M().user.getByUname('system', username);
             if (!udoc) {
@@ -60,6 +72,7 @@ export function apply(ctx: Context, config: ReturnType<typeof Config>) {
                 this.response.status = 401;
                 return;
             }
+
             try {
                 await udoc.checkPassword(password);
             } catch (e) {
@@ -68,6 +81,7 @@ export function apply(ctx: Context, config: ReturnType<typeof Config>) {
                 this.response.status = 401;
                 return;
             }
+
             const token = signToken(
                 { uid: udoc._id, uname: udoc.uname, domainId: 'system' },
                 jwtSecret,

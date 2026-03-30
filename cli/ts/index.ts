@@ -81,7 +81,7 @@ function printAddonHintIfNeeded(err: unknown): void {
   if (!isLikelyMissingAddonOrMisconfigured(err)) return;
   console.error('');
   console.error('If the URL is correct, the server may be missing the hydrooj-rest-api addon (or it needs a restart).');
-  console.error('A working install should serve JSON from GET /rest-api/login (not HTML 404).');
+  console.error('A working install should serve JSON from POST /rest-api/login (not HTML 404).');
 }
 
 function saveConfigBaseUrl(url: string): void {
@@ -126,6 +126,83 @@ function requireToken(token: string | null): string {
     process.exit(1);
   }
   return token;
+}
+
+async function questionHidden(prompt: string): Promise<string> {
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+
+  // If not running in a real terminal (stdin piped), we can't reliably hide echo.
+  if (!stdin.isTTY) {
+    return await new Promise((resolve) => {
+      const rl = readline.createInterface({ input: stdin, output: stdout });
+      rl.question(prompt, (ans) => {
+        rl.close();
+        resolve(ans);
+      });
+    });
+  }
+
+  stdout.write(prompt);
+  stdin.setRawMode(true);
+  stdin.resume();
+
+  return await new Promise<string>((resolve) => {
+    let password = '';
+    let cleanedUp = false;
+
+    function cleanup(onData: (data: Buffer) => void) {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      try {
+        stdin.off('data', onData);
+      } catch {}
+      try {
+        stdin.setRawMode(false);
+      } catch {}
+      try {
+        stdin.pause();
+      } catch {}
+    }
+
+    const onData = (data: Buffer) => {
+      const s = data.toString('utf8');
+
+      // Enter
+      if (s === '\r' || s === '\n') {
+        cleanup(onData);
+        stdout.write('\n');
+        resolve(password);
+        return;
+      }
+
+      // Ctrl-C
+      if (s === '\u0003') {
+        cleanup(onData);
+        process.exit(130);
+        return;
+      }
+
+      // Backspace/Delete
+      if (s === '\u007f' || s === '\b') {
+        if (password.length > 0) {
+          password = password.slice(0, -1);
+          // Remove one '*' from the screen.
+          stdout.write('\b \b');
+        }
+        return;
+      }
+
+      // Ignore escape sequences (arrow keys, etc.)
+      if (s.startsWith('\u001b')) return;
+
+      // Most passwords are ASCII; for other chars, treat each keypress as 1 char.
+      password += s;
+      stdout.write('*'.repeat(Array.from(s).length || 1));
+    };
+
+    stdin.on('data', onData);
+  });
 }
 
 function apiRequest(baseUrl: string, apiPath: string, method: string = 'GET', body?: object, token?: string | null): Promise<any> {
@@ -223,11 +300,11 @@ async function login(baseUrl: string): Promise<void> {
   const question = (q: string): Promise<string> => new Promise((r) => rl.question(q, r));
 
   const username = await question('Username: ');
-  const password = await question('Password: ');
+  const password = await questionHidden('Password: ');
   rl.close();
 
   try {
-    const data = await apiRequest(baseUrl, '/rest-api/login', 'GET', { username, password });
+    const data = await apiRequest(baseUrl, '/rest-api/login', 'POST', { username, password });
     if (data.token) {
       saveSession(data.token);
       console.log(`Logged in as ${data.uname} (uid=${data.uid})`);
@@ -240,9 +317,7 @@ async function login(baseUrl: string): Promise<void> {
     console.error('Login failed:', msg);
     try {
       const sample = resolveApiUrl(baseUrl, '/rest-api/login');
-      sample.searchParams.set('username', '...');
-      sample.searchParams.set('password', '...');
-      console.error('Login URL shape (credentials redacted):', sample.href);
+      console.error('Login endpoint (POST JSON body, credentials omitted):', sample.href);
     } catch {
       console.error('Config base URL:', baseUrl);
     }
@@ -384,19 +459,6 @@ Commands:
   contests              List contests only (excludes homework)
   contest-detail <id>   Contest metadata
   contest-problems <id> Problems in a contest
-
-REST endpoints (reference; list routes accept page, pageSize; problems list also tag, difficulty, keyword):
-  /rest-api/login?username=&password=
-  /rest-api/problems?page=&pageSize=&tag=&difficulty=&keyword=
-  /rest-api/problems/:id
-  /rest-api/submissions?page=&pageSize=
-  /rest-api/submissions/:id
-  /rest-api/homework?page=&pageSize=
-  /rest-api/homework/:id
-  /rest-api/homework/:id/problems
-  /rest-api/contests?page=&pageSize=
-  /rest-api/contests/:id
-  /rest-api/contests/:id/problems
 
 Help:
   help, -h, --help      Show this text
