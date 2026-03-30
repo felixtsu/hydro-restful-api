@@ -29,13 +29,22 @@ A read-only RESTful interface for [HydroOJ](https://github.com/hydro-dev/Hydro),
 
 #### 1. Server Setup (Addon)
 
-1. **Install**: Clone this repository and link it to your HydroOJ installation:
+**Standard Installation** (once published to npm):
+```bash
+# In your HydroOJ project directory
+npm install hydrooj-rest-api
+# Or via HydroOJ CLI
+hydrooj addon add hydrooj-rest-api
+```
+
+**Development / Local Installation**:
+1. Clone this repository and link the addon:
    ```bash
    cd addon && npm link
    cd /path/to/hydrooj && npm link hydrooj-rest-api
    ```
-2. **Security**: Set a strong `JWT_SECRET` environment variable (see [Security](#security)).
-3. **Restart**: Restart HydroOJ to register the `/rest-api` routes.
+2. **Security**: Configure your `JWT_SECRET` (see [Security](#security)).
+3. **Restart**: Restart HydroOJ to apply the changes.
 
 #### 2. Client Setup (CLI)
 
@@ -83,13 +92,22 @@ Detailed API specifications, including all endpoints and parameters, are availab
 
 #### 1. 服务端配置 (Addon)
 
-1. **安装**：拉取仓库并将其链接到你的 HydroOJ 实例：
+**标准安装** (发布至 npm 后):
+```bash
+# 在你的 HydroOJ 项目目录下
+npm install hydrooj-rest-api
+# 或通过 HydroOJ 命令行工具
+hydrooj addon add hydrooj-rest-api
+```
+
+**本地开发安装**:
+1. 拉取仓库并手动链接插件：
    ```bash
    cd addon && npm link
    cd /path/to/hydrooj && npm link hydrooj-rest-api
    ```
-2. **安全**：设置强随机的 `JWT_SECRET` 环境变量（详见 [安全配置](#安全配置)）。
-3. **重启**：重启 HydroOJ 以注册 `/rest-api` 路由。
+2. **安全配置**：设置 `JWT_SECRET` 环境变量（详见 [安全配置](#安全配置)）。
+3. **重启**：重启 HydroOJ 以加载插件。
 
 #### 2. 客户端配置 (CLI)
 
