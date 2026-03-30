@@ -8,10 +8,6 @@ import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
 
-interface Config {
-  baseUrl: string;
-}
-
 interface Session {
   token: string;
 }
@@ -19,9 +15,6 @@ interface Session {
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'hydrooj_cli');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const SESSION_FILE = path.join(CONFIG_DIR, 'session.json');
-
-/** Default API site when no config file and no HYDRO_API_URL (Hydro official instance). */
-const DEFAULT_BASE_URL = 'https://hydro.ac';
 
 /** Join base (may include path e.g. https://host/d/main/) with /rest-api/... without dropping the path prefix. */
 function resolveApiUrl(baseUrl: string, apiPath: string): URL {
@@ -45,9 +38,7 @@ function readConfigFileBaseUrl(): string | null {
 function loadConfig(): string {
   const fromFile = readConfigFileBaseUrl();
   if (fromFile) return fromFile;
-  const fromEnv = (process.env.HYDRO_API_URL || '').trim();
-  if (fromEnv) return fromEnv;
-  return DEFAULT_BASE_URL;
+  return (process.env.HYDRO_API_URL || '').trim();
 }
 
 function loadConfigWithSource(): { baseUrl: string; source: string } {
@@ -55,7 +46,42 @@ function loadConfigWithSource(): { baseUrl: string; source: string } {
   if (fromFile) return { baseUrl: fromFile, source: `file (${CONFIG_FILE})` };
   const fromEnv = (process.env.HYDRO_API_URL || '').trim();
   if (fromEnv) return { baseUrl: fromEnv, source: 'environment (HYDRO_API_URL)' };
-  return { baseUrl: DEFAULT_BASE_URL, source: `default (${DEFAULT_BASE_URL}, Hydro official)` };
+  return {
+    baseUrl: '',
+    source: 'not set — run: hydrooj-rest config base-url <url> or set HYDRO_API_URL',
+  };
+}
+
+function requireBaseUrl(baseUrl: string): string {
+  const u = baseUrl.trim();
+  if (!u) {
+    console.error('No base URL configured. This CLI only works against a Hydro site that has the hydrooj-rest-api server addon installed.');
+    console.error('Set your OJ site root, for example:');
+    console.error('  hydrooj-rest config base-url https://your-oj.example.com');
+    console.error('Or set the environment variable HYDRO_API_URL.');
+    console.error('If the site uses /d/<domain>/ in the browser, include that path in the URL.');
+    process.exit(1);
+  }
+  return u;
+}
+
+/** True when failure often means wrong host, no /rest-api route, or addon not loaded (not e.g. bad password). */
+function isLikelyMissingAddonOrMisconfigured(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/HTTP 401|HTTP 403\b/.test(msg)) return false;
+  if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|EAI_AGAIN|getaddrinfo/i.test(msg)) return true;
+  if (/HTTP 404\b/.test(msg)) return true;
+  if (/expected JSON/i.test(msg)) return true;
+  if (/Empty response body/i.test(msg)) return true;
+  if (/HTTP 502|HTTP 503|HTTP 504\b/.test(msg)) return true;
+  return false;
+}
+
+function printAddonHintIfNeeded(err: unknown): void {
+  if (!isLikelyMissingAddonOrMisconfigured(err)) return;
+  console.error('');
+  console.error('If the URL is correct, the server may be missing the hydrooj-rest-api addon (or it needs a restart).');
+  console.error('A working install should serve JSON from GET /rest-api/login (not HTML 404).');
 }
 
 function saveConfigBaseUrl(url: string): void {
@@ -220,7 +246,8 @@ async function login(baseUrl: string): Promise<void> {
     } catch {
       console.error('Config base URL:', baseUrl);
     }
-    console.error(`Check ${CONFIG_FILE} (baseUrl or base_url) or env HYDRO_API_URL. If the site uses /d/<domain>/ in the browser, include that path in the base URL (with trailing slash).`);
+    console.error(`Check ${CONFIG_FILE} (baseUrl or base_url), env HYDRO_API_URL, and that the base URL includes /d/<domain>/ if your site uses it.`);
+    printAddonHintIfNeeded(err);
     process.exit(1);
   }
 }
@@ -334,6 +361,9 @@ async function contestProblems(baseUrl: string, token: string, id: string): Prom
 function printHelp(): void {
   console.log(`HydroOJ REST CLI (TypeScript)
 
+First-time setup (your Hydro server needs the hydrooj-rest-api addon):
+  hydrooj-rest config base-url https://your-oj.example.com
+
 Usage:
   hydrooj-rest <command> [args]
   (after: npm install -g hydrooj-rest-cli)
@@ -373,14 +403,14 @@ Help:
 
 Config:
   ${CONFIG_FILE}
-    baseUrl or base_url — site root, e.g. https://oj.example.com
+    baseUrl or base_url — required before login/API use: your OJ site root, e.g. https://oj.example.com
                           or https://oj.example.com/d/<domain>/ if URLs use /d/...
-    If unset and HYDRO_API_URL is empty, default is ${DEFAULT_BASE_URL} (Hydro official).
+    The server must have the hydrooj-rest-api addon installed.
   ${SESSION_FILE}
     Written by login (Bearer token)
 
 Environment:
-  HYDRO_API_URL         Overrides default when config file has no base URL
+  HYDRO_API_URL         Base URL when the config file does not set baseUrl / base_url
   HYDRO_CLI_DEBUG=1     Verbose errors (if implemented for a command)
 `);
 }
@@ -401,6 +431,20 @@ async function main() {
     process.exit(0);
   }
 
+  const COMMANDS_NEEDING_BASE = new Set([
+    'login',
+    'list',
+    'show',
+    'status',
+    'homework',
+    'contests',
+    'homework-detail',
+    'homework-problems',
+    'contest-detail',
+    'contest-problems',
+  ]);
+  const apiBase = COMMANDS_NEEDING_BASE.has(cmd) ? requireBaseUrl(baseUrl) : '';
+
   switch (cmd) {
     case 'config': {
       const sub = args[1];
@@ -420,44 +464,44 @@ async function main() {
         break;
       }
       const { baseUrl: shown, source } = loadConfigWithSource();
-      console.log(`base_url: ${shown}`);
+      console.log(shown ? `base_url: ${shown}` : 'base_url: (not set)');
       console.log(`source: ${source}`);
       break;
     }
     case 'login':
-      await login(baseUrl);
+      await login(apiBase);
       break;
     case 'list':
-      await listProblems(baseUrl, requireToken(token), {});
+      await listProblems(apiBase, requireToken(token), {});
       break;
     case 'show':
       if (!args[1]) { console.error('Usage: hydrooj-rest show <problem_id>'); process.exit(1); }
-      await showProblem(baseUrl, requireToken(token), args[1]);
+      await showProblem(apiBase, requireToken(token), args[1]);
       break;
     case 'status':
-      await showStatus(baseUrl, requireToken(token), args[1]);
+      await showStatus(apiBase, requireToken(token), args[1]);
       break;
     case 'homework':
-      await listHomework(baseUrl, requireToken(token));
+      await listHomework(apiBase, requireToken(token));
       break;
     case 'contests':
-      await listContests(baseUrl, requireToken(token));
+      await listContests(apiBase, requireToken(token));
       break;
     case 'homework-detail':
       if (!args[1]) { console.error('Usage: hydrooj-rest homework-detail <homework_id>'); process.exit(1); }
-      await homeworkDetail(baseUrl, requireToken(token), args[1]);
+      await homeworkDetail(apiBase, requireToken(token), args[1]);
       break;
     case 'homework-problems':
       if (!args[1]) { console.error('Usage: hydrooj-rest homework-problems <homework_id>'); process.exit(1); }
-      await homeworkProblems(baseUrl, requireToken(token), args[1]);
+      await homeworkProblems(apiBase, requireToken(token), args[1]);
       break;
     case 'contest-detail':
       if (!args[1]) { console.error('Usage: hydrooj-rest contest-detail <contest_id>'); process.exit(1); }
-      await contestDetail(baseUrl, requireToken(token), args[1]);
+      await contestDetail(apiBase, requireToken(token), args[1]);
       break;
     case 'contest-problems':
       if (!args[1]) { console.error('Usage: hydrooj-rest contest-problems <contest_id>'); process.exit(1); }
-      await contestProblems(baseUrl, requireToken(token), args[1]);
+      await contestProblems(apiBase, requireToken(token), args[1]);
       break;
     default:
       console.error(`Unknown command: ${cmd}`);
@@ -468,5 +512,6 @@ async function main() {
 
 main().catch((err) => {
   console.error('Error:', err?.message ?? err);
+  printAddonHintIfNeeded(err);
   process.exit(1);
 });
