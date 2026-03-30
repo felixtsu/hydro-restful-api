@@ -39,7 +39,11 @@ hydrooj_rest_api/
 │   ├── index.ts              # Addon entry: `apply`, route registration (loaded by Hydro)
 │   └── routes.ts             # Route handlers (parallel module; entry is `index.ts`)
 ├── cli/ts/
-│   └── index.ts              # CLI client
+│   ├── package.json          # npm package `hydrooj-rest-cli`, bin `hydrooj-rest`
+│   ├── tsconfig.json
+│   ├── bin/hydrooj-rest.js   # Launcher → dist/
+│   ├── index.ts              # CLI source
+│   └── dist/                 # Build output (gitignored); created by `npm run build`
 ├── scripts/
 │   └── test-rest-addon.sh
 ├── SPEC.md
@@ -63,9 +67,9 @@ npm link /path/to/hydrooj_rest_api/addon
 **CLI**
 
 ```bash
-cd cli/ts
-npx ts-node index.ts login
-npx ts-node index.ts help
+npm install -g hydrooj-rest-cli   # after publish; or: cd cli/ts && npm run build && npm link
+hydrooj-rest login
+hydrooj-rest help
 ```
 
 `help` also documents `homework-detail`, `homework-problems`, `contest-detail`, and `contest-problems` (each takes an id).
@@ -201,9 +205,9 @@ npm link /path/to/hydrooj_rest_api/addon
 **命令行**
 
 ```bash
-cd cli/ts
-npx ts-node index.ts login
-npx ts-node index.ts help
+npm install -g hydrooj-rest-cli   # 发布后；或源码：cd cli/ts && npm run build && npm link
+hydrooj-rest login
+hydrooj-rest help
 ```
 
 `help` 中亦说明 `homework-detail`、`homework-problems`、`contest-detail`、`contest-problems`（均需传入 id）。

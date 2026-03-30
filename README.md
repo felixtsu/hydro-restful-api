@@ -1,105 +1,234 @@
 # HydroOJ REST API
 
+This repository ships **two separate artifacts**: a **HydroOJ server addon** and a **Node.js CLI**. They are versioned and published independently on npm when you choose to publish.
+
 ---
 
 ## English
 
-Read-only REST endpoints for HydroOJ, suitable for remote CLI access. `GET /rest-api/login` returns a JWT for authenticated requests. Code submission and contest or homework registration are not provided here; use the web UI or Hydro’s native APIs for those.
+### 1. Two artifacts — what each one is
 
-### Repository layout
+| Artifact | Path | Role |
+|----------|------|------|
+| **Server addon** | `addon/` | Runs **inside** the HydroOJ Node process. Registers read-only HTTP routes under **`/rest-api/*`**, issues JWTs via `GET /rest-api/login`, and reads problems, submissions, homework, and contests from Hydro’s models. **Does not** expose code submit or contest/homework registration. |
+| **CLI** | `cli/ts/` | Small **Node 18+** client for anyone who has a shell. Calls the same REST API, saves a token under `~/.config/hydrooj_cli/`. Command name: **`hydrooj-rest`**. |
 
-```
-addon/           # HydroOJ addon (server-side)
-cli/ts/          # TypeScript / Node CLI
-```
+End users of your OJ only need the **CLI** (or any HTTP client). **Only the machine that runs Hydro** needs the **addon**.
 
-### Deployment
+---
 
-**Server (addon)**
+### 2. Quick install (step by step)
 
-1. Copy `addon/` onto the HydroOJ server and install or link it like other Hydro addons.
-2. Set the `JWT_SECRET` environment variable.
-3. Restart HydroOJ.
+#### A. Hydro server — install the addon
 
-The addon must expose **`export function apply(ctx, config)`** (and may export `export const Config`). Hydro registers routes from `apply`; a default-export class with instance methods alone will not register `/rest-api/...` routes.
+1. **Get the code**  
+   - Clone this repo, *or* after you publish: install the npm package `hydrooj-rest-api` (see [Hydro plugins](https://docs.hydro.ac/docs/Hydro/plugins) for how your Hydro version loads plugins).
 
-**CLI**
+2. **Link or install into Hydro** (pick one; exact layout depends on your install):
+   ```bash
+   cd /path/to/hydrooj_rest_api/addon
+   npm link
+   cd /path/to/your-hydrooj-project   # Hydro app root, see Hydro docs
+   npm link hydrooj-rest-api
+   ```
+   Or copy/symlink the `addon` folder the way your deployment already loads custom addons.
+
+3. **Configure**  
+   - Set **`JWT_SECRET`** in the environment (or use addon config `jwtSecret` if your Hydro setup reads it).
+
+4. **Restart** HydroOJ so `export function apply(ctx, config)` runs and routes are registered.
+
+5. **Check**  
+   - `GET /rest-api/login` with bad credentials should return **401** JSON, not an HTML 404.
+
+#### JWT_SECRET (server — set this in production)
+
+Login returns a **JWT**; every other `/rest-api/*` call sends it as `Authorization: Bearer …`. The addon **signs and verifies** that token with **`JWT_SECRET`**. If someone learns your secret, they can mint valid tokens for your site.
+
+| Question | Answer |
+|----------|--------|
+| Do I need to set it? | **Yes**, for any real deployment. If you omit it, the code falls back to a known default string — fine for a quick local try, **unsafe on the internet**. |
+| What value? | A long, **random** string (e.g. 32+ random bytes, encoded). Never commit it to git. |
+| Where? | Same place you set other Hydro env vars: systemd `Environment=`, Docker `-e`, process manager config, etc. Some installs also accept addon config **`jwtSecret`** — same role as `JWT_SECRET`. |
+| If I change it? | All existing tokens become invalid; users must **log in again**. |
+
+Generate one (either is fine):
 
 ```bash
-cd cli/ts && npx ts-node index.ts login
-npx ts-node index.ts help
+openssl rand -base64 32
 ```
 
-See `help` for all commands, including `homework-detail`, `homework-problems`, `contest-detail`, and `contest-problems`.
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
 
-### API endpoints
+#### B. Your laptop — install the CLI
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/rest-api/login?username=X&password=Y` | Login, returns token |
-| GET | `/rest-api/problems?page=1&pageSize=20` | List problems |
-| GET | `/rest-api/problems/:id` | Problem details |
-| GET | `/rest-api/submissions?page=1&pageSize=20` | List submissions |
-| GET | `/rest-api/submissions/:id` | Submission status |
-| GET | `/rest-api/homework?page=1&pageSize=20` | List homework (`rule: homework`) |
-| GET | `/rest-api/homework/:id` | Homework details |
-| GET | `/rest-api/homework/:id/problems` | Homework problems |
-| GET | `/rest-api/contests?page=1&pageSize=20` | List contests only (`rule` ≠ `homework`) |
-| GET | `/rest-api/contests/:id` | Contest details |
-| GET | `/rest-api/contests/:id/problems` | Contest problems |
+**From npm (after you or someone has published `hydrooj-rest-cli`):**
 
-List endpoints support **`page`** and **`pageSize`** (capped at 100). The problems list also supports **`tag`**, **`difficulty`**, and **`keyword`**.
+```bash
+npm install -g hydrooj-rest-cli
+hydrooj-rest help
+```
 
-These routes use the `/rest-api` prefix so they do not collide with Hydro’s built-in `/api/:op` handler.
+**From a git clone (development):**
+
+```bash
+cd cli/ts
+npm install
+npm run build
+npm link              # optional: puts hydrooj-rest on your PATH
+hydrooj-rest help
+# or: node bin/hydrooj-rest.js help
+```
+
+**Point the CLI at your site:**
+
+- Create `~/.config/hydrooj_cli/config.json`:
+  ```json
+  { "baseUrl": "https://your-oj.example.com" }
+  ```
+  If the site uses a domain prefix in URLs, include it, e.g. `https://your-oj.example.com/d/main/`.
+
+- Or set **`HYDRO_API_URL`** to that URL.
+
+Then:
+
+```bash
+hydrooj-rest login
+hydrooj-rest list
+```
+
+---
+
+### 3. Publishing to npm (for maintainers)
+
+**Prerequisites**
+
+1. [Create an npm account](https://www.npmjs.com/signup).
+2. Log in locally: `npm login` (with 2FA, use an [access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) for CI).
+3. In **`cli/ts/package.json`** and **`addon/package.json`**, replace the placeholder **`OWNER`** in `repository`, `bugs`, and `homepage` with your real GitHub user or organization.
+
+**Package names**
+
+- Addon: **`hydrooj-rest-api`** (`addon/package.json`).
+- CLI: **`hydrooj-rest-cli`** (`cli/ts/package.json`).
+
+If a name is already taken on the public registry, switch to a **scoped** name, e.g. `@your-org/hydrooj-rest-api`, and publish with:
+
+```bash
+npm publish --access public
+```
+
+**Publish the CLI**
+
+```bash
+cd cli/ts
+npm install
+npm run build          # prepublishOnly also runs this on publish
+npm publish
+```
+
+Sanity check:
+
+```bash
+npm install -g hydrooj-rest-cli
+hydrooj-rest help
+```
+
+**Publish the addon**
+
+```bash
+cd addon
+npm publish
+```
+
+On each Hydro instance, install the version you published (per [Hydro plugin documentation](https://docs.hydro.ac/docs/Hydro/plugins)) — often `npm install hydrooj-rest-api@version` from the Hydro project root, or `npm link` during development.
+
+**Version bumps**
+
+- Use [semver](https://semver.org/): bump `version` in the relevant `package.json` before each publish.
+- CLI and addon can be released on different schedules.
+
+---
+
+### 4. API overview
+
+Read-only JSON API under **`/rest-api`**, JWT via **`GET /rest-api/login`**. Details: **`SPEC.md`**.
 
 ---
 
 ## 中文
 
-面向 HydroOJ 的只读 REST 接口，便于远程 CLI 等客户端访问。`GET /rest-api/login` 用于获取 JWT，其它受保护接口在请求头中携带令牌。本题库不提供代码提交以及比赛/作业报名；请使用 Web 端或 Hydro 原生能力完成这些操作。
+### 1. 仓库里的两件东西
 
-### 仓库结构
+| 构件 | 路径 | 作用 |
+|------|------|------|
+| **服务端插件** | `addon/` | 跑在 **HydroOJ 的 Node 进程里**，注册 **`/rest-api/*`** 只读接口，用 `GET /rest-api/login` 发 JWT，读题目、提交记录、作业、比赛等。**不提供**交代码、报名比赛/作业。 |
+| **命令行客户端** | `cli/ts/` | 给本机用的 **Node 18+** 小工具，调同一套 REST，令牌存在 `~/.config/hydrooj_cli/`。命令名：**`hydrooj-rest`**。 |
 
-```
-addon/           # HydroOJ 插件（服务端）
-cli/ts/          # TypeScript / Node CLI
-```
+学生、老师一般只装 **CLI**（或自己写 HTTP 客户端）；**只有跑 Hydro 的服务器**需要装 **插件**。
 
-### 部署说明
+---
 
-**服务端（插件）**
+### 2. 快速安装步骤
 
-1. 将 `addon/` 放到 HydroOJ 服务器上，按普通 Hydro 插件方式安装或链接。
-2. 配置环境变量 `JWT_SECRET`。
-3. 重启 HydroOJ。
+#### A. Hydro 服务器上装插件
 
-插件必须提供 **`export function apply(ctx, config)`**（可选 `export const Config`）。Hydro 通过 `apply` 注册路由；若仅有默认导出的类并把路由写在实例方法上，将无法注册 `/rest-api/...` 路由。
+1. 拉取本仓库代码，或发布后从 npm 安装包 **`hydrooj-rest-api`**（具体加载方式见 [Hydro 插件文档](https://docs.hydro.ac/docs/Hydro/plugins)）。
+2. 在插件目录 `npm link`，再到 Hydro 工程根目录执行 `npm link hydrooj-rest-api`（或按你现有方式把 `addon` 链进 Hydro）。
+3. 配置环境变量 **`JWT_SECRET`**（或通过 Hydro 可读的配置传 `jwtSecret`）。
+4. **重启** HydroOJ。
+5. 用错误账号访问 `GET /rest-api/login` 应返回 **401** JSON。
 
-**命令行客户端**
+#### JWT_SECRET（服务端 — 生产环境务必配置）
+
+登录接口返回 **JWT**，其它 `/rest-api/*` 请求用 `Authorization: Bearer …` 携带。插件用 **`JWT_SECRET` 签发并校验**令牌。泄露该密钥等于别人可以伪造合法登录态。
+
+| 问题 | 说明 |
+|------|------|
+| 要不要设？ | **要。** 正式对外或多人使用时必须设置。若不设，代码会使用内置默认字符串，仅适合本机试跑，**公网不可用**。 |
+| 设成什么？ | **随机、足够长**的密钥（例如 32 字节随机再编码）。不要写进仓库。 |
+| 设在哪里？ | 与 Hydro 其它环境变量相同：systemd `Environment=`、Docker `-e`、进程管理器配置等。部分部署也可在插件配置里写 **`jwtSecret`**，与 `JWT_SECRET` 作用相同。 |
+| 更换会怎样？ | 旧令牌全部失效，用户需 **重新登录**。 |
+
+生成示例（任选其一）：
 
 ```bash
-cd cli/ts && npx ts-node index.ts login
-npx ts-node index.ts help
+openssl rand -base64 32
 ```
 
-运行 `help` 可查看全部子命令，含 `homework-detail`、`homework-problems`、`contest-detail`、`contest-problems`。
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
 
-### 接口一览
+#### B. 本机装 CLI
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/rest-api/login?username=X&password=Y` | 登录，返回令牌 |
-| GET | `/rest-api/problems?page=1&pageSize=20` | 题目列表 |
-| GET | `/rest-api/problems/:id` | 题目详情 |
-| GET | `/rest-api/submissions?page=1&pageSize=20` | 提交记录列表 |
-| GET | `/rest-api/submissions/:id` | 提交状态 |
-| GET | `/rest-api/homework?page=1&pageSize=20` | 作业列表（Hydro `rule: homework`） |
-| GET | `/rest-api/homework/:id` | 作业详情 |
-| GET | `/rest-api/homework/:id/problems` | 作业题目 |
-| GET | `/rest-api/contests?page=1&pageSize=20` | 比赛列表（不含 homework 规则） |
-| GET | `/rest-api/contests/:id` | 比赛详情 |
-| GET | `/rest-api/contests/:id/problems` | 比赛题目 |
+**已发布到 npm 时：**
 
-列表类接口支持 **`page`**、**`pageSize`**（上限 100）。题目列表另支持 **`tag`**、**`difficulty`**、**`keyword`** 筛选。
+```bash
+npm install -g hydrooj-rest-cli
+hydrooj-rest help
+```
 
-接口前缀为 `/rest-api`，避免与 Hydro 内置的 `/api/:op` 冲突。
+**从源码：**
+
+```bash
+cd cli/ts && npm install && npm run build && npm link
+hydrooj-rest help
+```
+
+配置 `~/.config/hydrooj_cli/config.json` 里的 **`baseUrl` / `base_url`**，或环境变量 **`HYDRO_API_URL`**（若站点 URL 带 `/d/某域/`，请写进 base URL）。
+
+---
+
+### 3. 发布到 npm（维护者）
+
+1. 注册并 `npm login`；若开启 2FA，CI 可用 [access token](https://docs.npmjs.com/creating-and-viewing-access-tokens)。
+2. 把 **`addon/package.json`** 和 **`cli/ts/package.json`** 里的 **`OWNER`** 改成真实 GitHub 地址。
+3. **CLI**：`cd cli/ts && npm publish`（发布前会自动 `npm run build`）。
+4. **插件**：`cd addon && npm publish`。
+5. 若包名被占用，改用作用域包名，例如 `@你的组织/hydrooj-rest-api`，并执行 `npm publish --access public`。
+6. 每次发布前在对应 `package.json` 里递增 **`version`**（语义化版本）。
+
+接口说明见 **`SPEC.md`**。
