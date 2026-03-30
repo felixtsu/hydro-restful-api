@@ -1,0 +1,13 @@
+{
+  "name": "hydrooj-rest-api",
+  "version": "1.0.0",
+  "description": "REST API addon for HydroOJ",
+  "main": "index.ts",
+  "hydro": {
+    "builtin": true,
+    "priority": 50
+  },
+  "peerDependencies": {
+    "hydrooj": "*"
+  }
+}
