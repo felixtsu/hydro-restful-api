@@ -20,6 +20,9 @@ const CONFIG_DIR = path.join(os.homedir(), '.config', 'hydrooj_cli');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const SESSION_FILE = path.join(CONFIG_DIR, 'session.json');
 
+/** Default API site when no config file and no HYDRO_API_URL (Hydro official instance). */
+const DEFAULT_BASE_URL = 'https://hydro.ac';
+
 /** Join base (may include path e.g. https://host/d/main/) with /rest-api/... without dropping the path prefix. */
 function resolveApiUrl(baseUrl: string, apiPath: string): URL {
   const trimmed = baseUrl.trim().replace(/\/+$/, '');
@@ -28,7 +31,7 @@ function resolveApiUrl(baseUrl: string, apiPath: string): URL {
   return new URL(rel, baseForJoin);
 }
 
-function loadConfig(): string {
+function readConfigFileBaseUrl(): string | null {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
@@ -36,7 +39,44 @@ function loadConfig(): string {
       if (u) return u;
     }
   } catch {}
-  return (process.env.HYDRO_API_URL || 'http://localhost:3000').trim();
+  return null;
+}
+
+function loadConfig(): string {
+  const fromFile = readConfigFileBaseUrl();
+  if (fromFile) return fromFile;
+  const fromEnv = (process.env.HYDRO_API_URL || '').trim();
+  if (fromEnv) return fromEnv;
+  return DEFAULT_BASE_URL;
+}
+
+function loadConfigWithSource(): { baseUrl: string; source: string } {
+  const fromFile = readConfigFileBaseUrl();
+  if (fromFile) return { baseUrl: fromFile, source: `file (${CONFIG_FILE})` };
+  const fromEnv = (process.env.HYDRO_API_URL || '').trim();
+  if (fromEnv) return { baseUrl: fromEnv, source: 'environment (HYDRO_API_URL)' };
+  return { baseUrl: DEFAULT_BASE_URL, source: `default (${DEFAULT_BASE_URL}, Hydro official)` };
+}
+
+function saveConfigBaseUrl(url: string): void {
+  const trimmed = url.trim();
+  try {
+    new URL(trimmed);
+  } catch {
+    throw new Error(`Invalid base URL: ${JSON.stringify(trimmed)}`);
+  }
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  let existing: Record<string, unknown> = {};
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      existing = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+    }
+  } catch {
+    existing = {};
+  }
+  delete existing.base_url;
+  existing.baseUrl = trimmed;
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(existing, null, 2) + '\n', { mode: 0o600 });
 }
 
 function loadSession(): string | null {
@@ -302,6 +342,8 @@ Dev / from source:
   cd cli/ts && npm run build && node bin/hydrooj-rest.js <command> [args]
 
 Commands:
+  config                Show effective base URL and where it comes from
+  config base-url <url> Save base URL to ${path.basename(CONFIG_DIR)}/config.json
   login                 Sign in; token is saved for later commands
   list                  List problems (first page, pageSize 20)
   show <id>             Print problem statement and samples
@@ -333,11 +375,12 @@ Config:
   ${CONFIG_FILE}
     baseUrl or base_url — site root, e.g. https://oj.example.com
                           or https://oj.example.com/d/<domain>/ if URLs use /d/...
+    If unset and HYDRO_API_URL is empty, default is ${DEFAULT_BASE_URL} (Hydro official).
   ${SESSION_FILE}
     Written by login (Bearer token)
 
 Environment:
-  HYDRO_API_URL         Used when config has no base URL
+  HYDRO_API_URL         Overrides default when config file has no base URL
   HYDRO_CLI_DEBUG=1     Verbose errors (if implemented for a command)
 `);
 }
@@ -359,6 +402,28 @@ async function main() {
   }
 
   switch (cmd) {
+    case 'config': {
+      const sub = args[1];
+      if (sub === 'base-url' || sub === 'base_url') {
+        const url = args[2];
+        if (!url) {
+          console.error('Usage: hydrooj-rest config base-url <url>');
+          process.exit(1);
+        }
+        try {
+          saveConfigBaseUrl(url);
+        } catch (e: any) {
+          console.error(e?.message ?? e);
+          process.exit(1);
+        }
+        console.log(`Wrote baseUrl to ${CONFIG_FILE}`);
+        break;
+      }
+      const { baseUrl: shown, source } = loadConfigWithSource();
+      console.log(`base_url: ${shown}`);
+      console.log(`source: ${source}`);
+      break;
+    }
     case 'login':
       await login(baseUrl);
       break;
