@@ -61,19 +61,41 @@ if (!udoc.hasPerm(M().builtin.PERM.PERM_CREATE_PROBLEM)) {
 
 ### 需要检查权限的操作
 
+**读操作：**
+
+| 操作 | 所需权限 | 错误响应 |
+|---|---|---|
+| `GET /rest-api/problems` | `PERM.PERM_VIEW_PROBLEM` | HTTP 403 |
+| `GET /rest-api/problems/:id` | `PERM.PERM_VIEW_PROBLEM` | HTTP 403 |
+| `GET /rest-api/submissions` | `PERM.PERM_VIEW_RECORD` | HTTP 403 |
+| `GET /rest-api/contests` | `PERM.PERM_VIEW_CONTEST` | HTTP 403 |
+| `GET /rest-api/homework` | `PERM.PERM_VIEW_HOMEWORK` | HTTP 403 |
+| `GET /rest-api/trainings` | `PERM.PERM_VIEW_TRAINING` | HTTP 403 |
+
+**写操作：**
+
 | 操作 | 所需权限 | 错误响应 |
 |---|---|---|
 | `POST /rest-api/problems` (upload) | `PERM.PERM_CREATE_PROBLEM` | HTTP 403 |
 | `POST /rest-api/contests` | `PERM.PERM_CREATE_CONTEST` | HTTP 403 |
-| `POST /rest-api/homework` | `PERM.PERM_CREATE_HOMEWORK` or `PERM.PERM_CREATE_CONTEST` | HTTP __403 |
+| `POST /rest-api/homework` | `PERM.PERM_CREATE_HOMEWORK` or `PERM.PERM_CREATE_CONTEST` | HTTP 403 |
 | `POST /rest-api/trainings` | `PERM.PERM_CREATE_TRAINING` | HTTP 403 |
+
+> **登录：** 所有操作都需要有效 JWT token，无 token → HTTP 401
 
 ### 关于读操作
 
-读操作（`GET`）目前没有权限检查，理由：
-- Hydro 内部对读操作本身也有权限内建在 model 层（如 `ProblemModel.get` 会过滤掉 hidden 题目）
-- 读操作不修改数据，风险相对低
-- 但如果需要严格模式，可在 `verifyToken` 后检查 `PERM.PERM_VIEW_PROBLEM` 等读权限
+所有 API（GET + POST）都需要登录，权限与 HydroOJ 账号体系完全同步。
+
+理由：
+- CLI 有 login 命令，不是匿名工具
+- Guest 用户在网页端能看公开题库，但**付费/私有内容**受权限保护
+- Agent 操作时必须用有权限的账号，权限应与网页端一致
+
+因此：
+- 所有 endpoint 都需要身份验证（无 token → 401）
+- GET 还需要读权限（如 `PERM_VIEW_PROBLEM`），否则 403
+- POST 还需要写权限（如 `PERM_CREATE_PROBLEM`），否则 403
 
 ---
 
