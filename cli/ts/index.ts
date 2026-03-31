@@ -7,6 +7,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
+import FormData from 'form-data';
 
 interface Session {
   token: string;
@@ -295,6 +296,127 @@ function apiRequest(baseUrl: string, apiPath: string, method: string = 'GET', bo
   });
 }
 
+async function readAllStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function readJsonWritePayloadAsync(argsAfterCmd: string[]): Promise<object> {
+  if (!argsAfterCmd.length) {
+    throw new Error('Expected --json, --file, or --stdin as the first option after the command');
+  }
+  const mode = argsAfterCmd[0];
+  if (mode === '--json') {
+    const raw = argsAfterCmd[1];
+    if (raw === undefined) {
+      throw new Error('Usage: hydrooj-cli <contest-create|homework-create|training-create> --json <json-string>');
+    }
+    return JSON.parse(raw) as object;
+  }
+  if (mode === '--file') {
+    const fp = argsAfterCmd[1];
+    if (!fp) {
+      throw new Error('Usage: hydrooj-cli <contest-create|homework-create|training-create> --file <path>');
+    }
+    return JSON.parse(fs.readFileSync(fp, 'utf8')) as object;
+  }
+  if (mode === '--stdin') {
+    const raw = await readAllStdin();
+    if (!raw.trim()) throw new Error('Empty stdin');
+    return JSON.parse(raw) as object;
+  }
+  throw new Error(`Expected --json, --file, or --stdin as the first option after the command; got ${mode}`);
+}
+
+function apiMultipartRequest(
+  baseUrl: string,
+  apiPath: string,
+  token: string,
+  zipPath: string,
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let url: URL;
+    try {
+      url = resolveApiUrl(baseUrl, apiPath);
+    } catch (e: any) {
+      reject(new Error(`Invalid base URL "${baseUrl}": ${e?.message || e}`));
+      return;
+    }
+
+    const form = new FormData();
+    form.append('zip', fs.createReadStream(zipPath), { filename: path.basename(zipPath) || 'problem.zip' });
+
+    const isHttps = url.protocol === 'https:';
+    const lib = isHttps ? https : http;
+    const headers: http.OutgoingHttpHeaders = {
+      ...form.getHeaders(),
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    };
+    const options: http.RequestOptions = {
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 3000),
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers,
+      timeout: 600000,
+    };
+
+    let settled = false;
+    const safeResolve = (v: any) => {
+      if (!settled) {
+        settled = true;
+        resolve(v);
+      }
+    };
+    const safeReject = (err: Error) => {
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    };
+
+    const req = lib.request(options, (res: http.IncomingMessage) => {
+      let data = '';
+      res.on('data', (chunk: Buffer | string) => {
+        data += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+      });
+      res.on('end', () => {
+        const status = res.statusCode ?? 0;
+        const raw = data.trim();
+        if (!raw) {
+          safeReject(new Error(`Empty response body (HTTP ${status})`));
+          return;
+        }
+        let json: any;
+        try {
+          json = JSON.parse(raw);
+        } catch {
+          safeReject(new Error(`HTTP ${status}, expected JSON, got: ${raw.slice(0, 240)}${raw.length > 240 ? '...' : ''}`));
+          return;
+        }
+        if (status >= 400) {
+          const detail = [json.message, json.error].filter(Boolean).join(' — ') || JSON.stringify(json);
+          safeReject(new Error(`HTTP ${status}: ${detail}`));
+        } else {
+          safeResolve(json);
+        }
+      });
+    });
+
+    req.on('error', (e: Error) => safeReject(e instanceof Error ? e : new Error(String(e))));
+    req.on('timeout', () => {
+      req.destroy();
+      safeReject(new Error('Request timed out'));
+    });
+    form.on('error', (e: Error) => safeReject(e));
+    form.pipe(req);
+  });
+}
+
 async function login(baseUrl: string): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const question = (q: string): Promise<string> => new Promise((r) => rl.question(q, r));
@@ -459,6 +581,11 @@ Commands:
   contests              List contests only (excludes homework)
   contest-detail <id>   Contest metadata
   contest-problems <id> Problems in a contest
+  problem-upload <zipPath>  POST multipart zip to /rest-api/problems (ICPC package)
+  contest-create        POST JSON to /rest-api/contests; first flag must be one of:
+                          --json <json-string> | --file <path> | --stdin
+  homework-create       POST JSON to /rest-api/homework; same --json | --file | --stdin
+  training-create       POST JSON to /rest-api/trainings; same --json | --file | --stdin
 
 Help:
   help, -h, --help      Show this text
@@ -504,6 +631,10 @@ async function main() {
     'homework-problems',
     'contest-detail',
     'contest-problems',
+    'problem-upload',
+    'contest-create',
+    'homework-create',
+    'training-create',
   ]);
   const apiBase = COMMANDS_NEEDING_BASE.has(cmd) ? requireBaseUrl(baseUrl) : '';
 
@@ -565,6 +696,39 @@ async function main() {
       if (!args[1]) { console.error('Usage: hydrooj-cli contest-problems <contest_id>'); process.exit(1); }
       await contestProblems(apiBase, requireToken(token), args[1]);
       break;
+    case 'problem-upload': {
+      const zipPath = args[1];
+      if (!zipPath) {
+        console.error('Usage: hydrooj-cli problem-upload <path-to-problem.zip>');
+        process.exit(1);
+      }
+      const abs = path.resolve(zipPath);
+      if (!fs.existsSync(abs)) {
+        console.error(`File not found: ${abs}`);
+        process.exit(1);
+      }
+      const out = await apiMultipartRequest(apiBase, '/rest-api/problems', requireToken(token), abs);
+      console.log(JSON.stringify(out, null, 2));
+      break;
+    }
+    case 'contest-create': {
+      const payload = await readJsonWritePayloadAsync(args.slice(1));
+      const out = await apiRequest(apiBase, '/rest-api/contests', 'POST', payload, requireToken(token));
+      console.log(JSON.stringify(out, null, 2));
+      break;
+    }
+    case 'homework-create': {
+      const payload = await readJsonWritePayloadAsync(args.slice(1));
+      const out = await apiRequest(apiBase, '/rest-api/homework', 'POST', payload, requireToken(token));
+      console.log(JSON.stringify(out, null, 2));
+      break;
+    }
+    case 'training-create': {
+      const payload = await readJsonWritePayloadAsync(args.slice(1));
+      const out = await apiRequest(apiBase, '/rest-api/trainings', 'POST', payload, requireToken(token));
+      console.log(JSON.stringify(out, null, 2));
+      break;
+    }
     default:
       console.error(`Unknown command: ${cmd}`);
       console.error('Run with help, -h, or --help for usage.');
