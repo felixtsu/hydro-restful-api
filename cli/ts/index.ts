@@ -184,13 +184,9 @@ async function questionHidden(prompt: string): Promise<string> {
         return;
       }
 
-      // Backspace/Delete
+      // Backspace/Delete (no screen echo — password entry stays hidden)
       if (s === '\u007f' || s === '\b') {
-        if (password.length > 0) {
-          password = password.slice(0, -1);
-          // Remove one '*' from the screen.
-          stdout.write('\b \b');
-        }
+        if (password.length > 0) password = password.slice(0, -1);
         return;
       }
 
@@ -199,7 +195,6 @@ async function questionHidden(prompt: string): Promise<string> {
 
       // Most passwords are ASCII; for other chars, treat each keypress as 1 char.
       password += s;
-      stdout.write('*'.repeat(Array.from(s).length || 1));
     };
 
     stdin.on('data', onData);
@@ -422,8 +417,10 @@ async function login(baseUrl: string): Promise<void> {
   const question = (q: string): Promise<string> => new Promise((r) => rl.question(q, r));
 
   const username = await question('Username: ');
-  const password = await questionHidden('Password: ');
+  // Close readline before hidden password input so it does not also handle stdin
+  // (otherwise the terminal echoes the real character and we would print '*' too).
   rl.close();
+  const password = await questionHidden('Password: ');
 
   try {
     const data = await apiRequest(baseUrl, '/rest-api/login', 'POST', { username, password });
