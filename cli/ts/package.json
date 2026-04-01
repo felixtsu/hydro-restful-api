@@ -36,6 +36,9 @@
     "build": "tsc",
     "prepublishOnly": "npm run build"
   },
+  "dependencies": {
+    "form-data": "^4.0.0"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "~5.7.0"
