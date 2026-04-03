@@ -156,6 +156,24 @@ function trainingDagHasCycle(nodes: { _id: number; requireNids: number[] }[]): b
 const contestOnlyQuery = { rule: { $ne: 'homework' } };
 const homeworkQuery = { rule: 'homework' };
 
+// Helper: contest.get() expects numeric docId, but list returns _id.toString() (ObjectId).
+// Try ObjectId lookup first, then fall back to docId.
+async function findContest(domainId: string, id: string) {
+    // Try ObjectId lookup
+    try {
+        const models = M();
+        const ObjectId = models.db.ObjectID || models.db.ObjectId;
+        const oid = new ObjectId(id);
+        const cdoc = await models.contest.getMulti(domainId, { _id: oid }).toArray();
+        if (cdoc?.length) return cdoc[0];
+    } catch { /* not an ObjectId, fall through */ }
+    // Fall back: try numeric docId
+    if (/^\d+$/.test(id)) {
+        return await M().contest.get(domainId, id);
+    }
+    return null;
+}
+
 export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
     // Login
     ctx.Route('rest_login', '/rest-api/login', class extends Handler {
@@ -680,7 +698,7 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_CONTEST')) return;
 
-            const cdoc = await M().contest.get(auth.domainId, id);
+            const cdoc = await findContest(auth.domainId, id);
             if (!cdoc || cdoc.rule === 'homework') {
                 this.response.status = 404;
                 this.response.body = { error: 'NOT_FOUND', message: 'Contest not found' };
@@ -707,7 +725,7 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_HOMEWORK')) return;
 
-            const cdoc = await M().contest.get(auth.domainId, id);
+            const cdoc = await findContest(auth.domainId, id);
             if (!cdoc || cdoc.rule !== 'homework') {
                 this.response.status = 404;
                 this.response.body = { error: 'NOT_FOUND', message: 'Homework not found' };
@@ -734,7 +752,7 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_CONTEST')) return;
 
-            const cdoc = await M().contest.get(auth.domainId, id);
+            const cdoc = await findContest(auth.domainId, id);
             if (!cdoc || cdoc.rule === 'homework') {
                 this.response.status = 404;
                 this.response.body = { error: 'NOT_FOUND', message: 'Contest not found' };
@@ -764,7 +782,7 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_HOMEWORK')) return;
 
-            const cdoc = await M().contest.get(auth.domainId, id);
+            const cdoc = await findContest(auth.domainId, id);
             if (!cdoc || cdoc.rule !== 'homework') {
                 this.response.status = 404;
                 this.response.body = { error: 'NOT_FOUND', message: 'Homework not found' };
