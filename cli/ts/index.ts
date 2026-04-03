@@ -8,6 +8,18 @@ import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
 import FormData from 'form-data';
+import { 
+  setOutputMode, setPrettyJson, setQuiet, 
+  renderJson, renderError, printHuman,
+  normalizeProblemList, normalizeProblem,
+  normalizeSubmissionList, normalizeSubmission,
+  normalizeHomeworkList, normalizeHomework,
+  normalizeContestList, normalizeContest,
+  humanProblem, humanProblemDetail,
+  humanSubmissionSummary, humanSubmissionDetail,
+  humanContestSummary, humanContestDetail,
+  outputMode
+} from './output';
 
 interface Session {
   token: string;
@@ -56,37 +68,9 @@ function loadConfigWithSource(): { baseUrl: string; source: string } {
 function requireBaseUrl(baseUrl: string): string {
   const u = baseUrl.trim();
   if (!u) {
-    console.error('No base URL configured. This CLI only works against a Hydro site that has the hydrooj-rest-api server addon installed.');
-    console.error('Set your OJ site root, for example:');
-    console.error('  hydrooj-cli config base-url https://your-oj.example.com');
-    console.error('Or set the environment variable HYDRO_API_URL.');
-    console.error('If the site uses /d/<domain>/ in the browser, include that path in the URL.');
-    process.exit(1);
+    throw new Error('No base URL configured. Set your OJ site root, for example: hydrooj-cli config base-url https://your-oj.example.com');
   }
   return u;
-}
-
-/** True when failure often means wrong host, no /rest-api route, or addon not loaded (not e.g. bad password). */
-function isLikelyMissingAddonOrMisconfigured(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (/HTTP 401|HTTP 403\b/.test(msg)) return false;
-  // If the error message indicates a specific resource not found from our JSON API,
-  // it means the addon IS loaded, just that the resource is missing.
-  if (/ — NOT_FOUND\b/.test(msg)) return false;
-
-  if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|EAI_AGAIN|getaddrinfo/i.test(msg)) return true;
-  if (/HTTP 404\b/.test(msg)) return true;
-  if (/expected JSON/i.test(msg)) return true;
-  if (/Empty response body/i.test(msg)) return true;
-  if (/HTTP 502|HTTP 503|HTTP 504\b/.test(msg)) return true;
-  return false;
-}
-
-function printAddonHintIfNeeded(err: unknown): void {
-  if (!isLikelyMissingAddonOrMisconfigured(err)) return;
-  console.error('');
-  console.error('If the URL is correct, the server may be missing the hydrooj-rest-api addon (or it needs a restart).');
-  console.error('A working install should serve JSON from POST /rest-api/login (not HTML 404).');
 }
 
 function saveConfigBaseUrl(url: string): void {
@@ -127,8 +111,7 @@ function saveSession(token: string): void {
 
 function requireToken(token: string | null): string {
   if (!token) {
-    console.error('Not logged in. Run "hydrooj-cli login" first.');
-    process.exit(1);
+    throw new Error('Not logged in. Run "hydrooj-cli login" first.');
   }
   return token;
 }
@@ -430,144 +413,149 @@ async function login(baseUrl: string): Promise<void> {
     const data = await apiRequest(baseUrl, '/rest-api/login', 'POST', { username, password });
     if (data.token) {
       saveSession(data.token);
-      console.log(`Logged in as ${data.uname} (uid=${data.uid})`);
+      printHuman(`Logged in as ${data.uname} (uid=${data.uid})`);
     } else {
-      console.error('Login failed: response had no token:', JSON.stringify(data));
-      process.exit(1);
+      throw new Error('Login failed: response had no token: ' + JSON.stringify(data));
     }
   } catch (err: any) {
-    const msg = err?.message ?? (err != null ? String(err) : 'unknown error');
-    console.error('Login failed:', msg);
-    try {
-      const sample = resolveApiUrl(baseUrl, '/rest-api/login');
-      console.error('Login endpoint (POST JSON body, credentials omitted):', sample.href);
-    } catch {
-      console.error('Config base URL:', baseUrl);
-    }
-    console.error(`Check ${CONFIG_FILE} (baseUrl or base_url), env HYDRO_API_URL, and that the base URL includes /d/<domain>/ if your site uses it.`);
-    printAddonHintIfNeeded(err);
-    process.exit(1);
+    throw err;
   }
 }
 
 async function listProblems(baseUrl: string, token: string, args: any): Promise<void> {
-  const params = new URLSearchParams({ page: '1', pageSize: '20', ...args });
-  const data = await apiRequest(baseUrl, `/rest-api/problems?${params}`, 'GET', undefined, token);
+  const data = await apiRequest(baseUrl, '/rest-api/problems', 'GET', { page: '1', pageSize: '20', ...args }, token);
 
-  console.log(`\nProblems (Total: ${data.total})`);
-  console.log(`Page ${data.page}/${data.totalPages}\n`);
-
-  for (const p of data.items) {
-    const tags = (p.tag || []).join(', ');
-    console.log(`  [${p.pid}] ${p.title} (Difficulty: ${p.difficulty}, Tags: ${tags})`);
+  const normalized = normalizeProblemList(data);
+  if (outputMode === 'json') {
+    renderJson(normalized);
+  } else {
+    printHuman(`\nProblems (Total: ${normalized.total})`);
+    printHuman(`Page ${normalized.page}/${normalized.totalPages}\n`);
+    for (const p of normalized.items) {
+      printHuman(humanProblem(p));
+    }
   }
 }
 
 async function showProblem(baseUrl: string, token: string, id: string): Promise<void> {
   const data = await apiRequest(baseUrl, `/rest-api/problems/${id}`, 'GET', undefined, token);
-
-  console.log(`\n#${data.pid}: ${data.title}`);
-  console.log(`Difficulty: ${data.difficulty}`);
-  console.log(`Tags: ${(data.tag || []).join(', ')}`);
-  console.log(`Time Limit: ${data.timeLimit || 1000}ms`);
-  console.log(`Memory Limit: ${data.memoryLimit || 256}MB`);
-  console.log(`AC/Submit: ${data.accepted || 0}/${data.submission || 0}`);
-  console.log(`\n${data.content || 'No description'}`);
-
-  if (data.samples && data.samples.length) {
-    console.log('\nSamples:');
-    data.samples.forEach((s: any, i: number) => {
-      console.log(`\nSample ${i + 1}:`);
-      console.log(`  Input: ${s.input}`);
-      console.log(`  Output: ${s.output}`);
-    });
+  const normalized = normalizeProblem(data);
+  if (outputMode === 'json') {
+    renderJson(normalized);
+  } else {
+    printHuman(humanProblemDetail(normalized));
   }
 }
 
 async function showStatus(baseUrl: string, token: string, id?: string): Promise<void> {
   if (!id) {
-    const data = await apiRequest(baseUrl, '/rest-api/submissions?page=1&pageSize=20', 'GET', undefined, token);
-    console.log('\nRecent Submissions');
-    for (const s of data.items) {
-      console.log(`  [${s.id}] #${s.pid} - ${s.status} (${s.score}%)`);
+    const data = await apiRequest(baseUrl, '/rest-api/submissions', 'GET', { page: '1', pageSize: '20' }, token);
+    const normalized = normalizeSubmissionList(data);
+    if (outputMode === 'json') {
+      renderJson(normalized);
+    } else {
+      printHuman('\nRecent Submissions');
+      for (const s of normalized.items) {
+        printHuman(humanSubmissionSummary(s));
+      }
     }
   } else {
     const data = await apiRequest(baseUrl, `/rest-api/submissions/${id}`, 'GET', undefined, token);
-    console.log(`\nSubmission #${data.id}`);
-    console.log(`Problem: #${data.pid}`);
-    console.log(`Status: ${data.status}`);
-    console.log(`Score: ${data.score}%`);
-    console.log(`Time: ${data.time}ms`);
-    console.log(`Memory: ${data.memory}KB`);
-    console.log(`Language: ${data.language}`);
+    const normalized = normalizeSubmission(data);
+    if (outputMode === 'json') {
+      renderJson(normalized);
+    } else {
+      printHuman(humanSubmissionDetail(normalized));
+    }
   }
 }
 
 async function listHomework(baseUrl: string, token: string): Promise<void> {
-  const data = await apiRequest(baseUrl, '/rest-api/homework?page=1&pageSize=20', 'GET', undefined, token);
-
-  console.log(`\nHomework (Total: ${data.total})`);
-  for (const c of data.items) {
-    console.log(`  [${c.id}] ${c.title} (${c.status})`);
+  const data = await apiRequest(baseUrl, '/rest-api/homework', 'GET', { page: '1', pageSize: '20' }, token);
+  const normalized = normalizeHomeworkList(data);
+  if (outputMode === 'json') {
+    renderJson(normalized);
+  } else {
+    printHuman(`\nHomework (Total: ${normalized.total})`);
+    for (const c of normalized.items) {
+      printHuman(humanContestSummary(c, 'Homework'));
+    }
   }
 }
 
 async function listContests(baseUrl: string, token: string): Promise<void> {
-  const data = await apiRequest(baseUrl, '/rest-api/contests?page=1&pageSize=20', 'GET', undefined, token);
-
-  console.log(`\nContests (Total: ${data.total})`);
-  for (const c of data.items) {
-    console.log(`  [${c.id}] ${c.title} (${c.status})`);
+  const data = await apiRequest(baseUrl, '/rest-api/contests', 'GET', { page: '1', pageSize: '20' }, token);
+  const normalized = normalizeContestList(data);
+  if (outputMode === 'json') {
+    renderJson(normalized);
+  } else {
+    printHuman(`\nContests (Total: ${normalized.total})`);
+    for (const c of normalized.items) {
+      printHuman(humanContestSummary(c, 'Contest'));
+    }
   }
-}
-
-function formatContestLike(label: string, data: any): void {
-  console.log(`\n${label} [${data.id}]: ${data.title}`);
-  console.log(`Rule: ${data.rule}  Status: ${data.status}`);
-  console.log(`Start: ${data.startAt}  End: ${data.endAt}`);
-  if (data.description) console.log(`\n${data.description}`);
-  const pids = data.problems || [];
-  if (pids.length) console.log(`\nProblem ids (pids): ${pids.join(', ')}`);
 }
 
 async function homeworkDetail(baseUrl: string, token: string, id: string): Promise<void> {
   const data = await apiRequest(baseUrl, `/rest-api/homework/${id}`, 'GET', undefined, token);
-  formatContestLike('Homework', data);
+  const normalized = normalizeHomework(data);
+  if (outputMode === 'json') {
+    renderJson(normalized);
+  } else {
+    printHuman(humanContestDetail(normalized, 'Homework'));
+  }
 }
 
 async function homeworkProblems(baseUrl: string, token: string, id: string): Promise<void> {
   const data = await apiRequest(baseUrl, `/rest-api/homework/${id}/problems`, 'GET', undefined, token);
-  console.log(`\nHomework problems (${(data.items || []).length})`);
-  for (const p of data.items || []) {
-    console.log(`  [#${p.pid}] ${p.title}`);
+  const normalized = normalizeProblemList(data);
+  if (outputMode === 'json') {
+    renderJson(normalized);
+  } else {
+    printHuman(`\nHomework problems (${normalized.items.length})`);
+    for (const p of normalized.items) {
+      printHuman(`  [#${p.displayId || p.id}] ${p.title}`);
+    }
   }
 }
 
 async function contestDetail(baseUrl: string, token: string, id: string): Promise<void> {
   const data = await apiRequest(baseUrl, `/rest-api/contests/${id}`, 'GET', undefined, token);
-  formatContestLike('Contest', data);
+  const normalized = normalizeContest(data);
+  if (outputMode === 'json') {
+    renderJson(normalized);
+  } else {
+    printHuman(humanContestDetail(normalized, 'Contest'));
+  }
 }
 
 async function contestProblems(baseUrl: string, token: string, id: string): Promise<void> {
   const data = await apiRequest(baseUrl, `/rest-api/contests/${id}/problems`, 'GET', undefined, token);
-  console.log(`\nContest problems (${(data.items || []).length})`);
-  for (const p of data.items || []) {
-    console.log(`  [#${p.pid}] ${p.title}`);
+  const normalized = normalizeProblemList(data);
+  if (outputMode === 'json') {
+    renderJson(normalized);
+  } else {
+    printHuman(`\nContest problems (${normalized.items.length})`);
+    for (const p of normalized.items) {
+      printHuman(`  [#${p.displayId || p.id}] ${p.title}`);
+    }
   }
 }
 
 function printHelp(): void {
-  console.log(`HydroOJ REST CLI (TypeScript)
+  console.log(`HydroOJ REST CLI (TypeScript) 2.x
 
 First-time setup (your Hydro server needs the hydrooj-rest-api addon):
   hydrooj-cli config base-url https://your-oj.example.com
 
 Usage:
-  hydrooj-cli <command> [args]
+  hydrooj-cli [global-flags] <command> [args]
   (after: npm install -g hydrooj-cli)
 
-Dev / from source:
-  cd cli/ts && npm run build && node bin/hydrooj-cli.js <command> [args]
+Global Flags:
+  --json                Output machine-readable JSON
+  --pretty              Pretty-print JSON output
+  --quiet               Suppress non-essential diagnostics in human mode
 
 Commands:
   config                Show effective base URL and where it comes from
@@ -590,26 +578,28 @@ Commands:
 
 Help:
   help, -h, --help      Show this text
-
-Config:
-  ${CONFIG_FILE}
-    baseUrl or base_url — required before login/API use: your OJ site root, e.g. https://oj.example.com
-                          or https://oj.example.com/d/<domain>/ if URLs use /d/...
-    The server must have the hydrooj-rest-api addon installed.
-  ${SESSION_FILE}
-    Written by login (Bearer token)
-
-Environment:
-  HYDRO_API_URL         Base URL when the config file does not set baseUrl / base_url
-  HYDRO_CLI_DEBUG=1     Verbose errors (if implemented for a command)
 `);
 }
 
 async function main() {
+  const rawArgs = process.argv.slice(2);
+
+  // Parse global flags (can appear anywhere, consumed before command dispatch)
+  const GLOBAL_FLAGS = new Set(['--json', '--pretty', '--quiet']);
+  const args: string[] = [];
+  for (let i = 0; i < rawArgs.length; i++) {
+    if (GLOBAL_FLAGS.has(rawArgs[i])) {
+      if (rawArgs[i] === '--json') setOutputMode('json');
+      else if (rawArgs[i] === '--pretty') setPrettyJson(true);
+      else if (rawArgs[i] === '--quiet') setQuiet(true);
+    } else {
+      args.push(rawArgs[i]);
+    }
+  }
+
   const baseUrl = loadConfig();
   const token = loadSession();
 
-  const args = process.argv.slice(2);
   const cmd = args[0];
 
   if (!cmd) {
@@ -645,21 +635,19 @@ async function main() {
       if (sub === 'base-url' || sub === 'base_url') {
         const url = args[2];
         if (!url) {
-          console.error('Usage: hydrooj-cli config base-url <url>');
-          process.exit(1);
+          throw new Error('Usage: hydrooj-cli config base-url <url>');
         }
-        try {
-          saveConfigBaseUrl(url);
-        } catch (e: any) {
-          console.error(e?.message ?? e);
-          process.exit(1);
-        }
-        console.log(`Wrote baseUrl to ${CONFIG_FILE}`);
+        saveConfigBaseUrl(url);
+        printHuman(`Wrote baseUrl to ${CONFIG_FILE}`);
         break;
       }
       const { baseUrl: shown, source } = loadConfigWithSource();
-      console.log(shown ? `base_url: ${shown}` : 'base_url: (not set)');
-      console.log(`source: ${source}`);
+      if (outputMode === 'json') {
+        renderJson({ baseUrl: shown, source });
+      } else {
+        printHuman(shown ? `base_url: ${shown}` : 'base_url: (not set)');
+        printHuman(`source: ${source}`);
+      }
       break;
     }
     case 'login':
@@ -669,7 +657,7 @@ async function main() {
       await listProblems(apiBase, requireToken(token), {});
       break;
     case 'show':
-      if (!args[1]) { console.error('Usage: hydrooj-cli show <problem_id>'); process.exit(1); }
+      if (!args[1]) { throw new Error('Usage: hydrooj-cli show <problem_id>'); }
       await showProblem(apiBase, requireToken(token), args[1]);
       break;
     case 'status':
@@ -682,63 +670,58 @@ async function main() {
       await listContests(apiBase, requireToken(token));
       break;
     case 'homework-detail':
-      if (!args[1]) { console.error('Usage: hydrooj-cli homework-detail <homework_id>'); process.exit(1); }
+      if (!args[1]) { throw new Error('Usage: hydrooj-cli homework-detail <homework_id>'); }
       await homeworkDetail(apiBase, requireToken(token), args[1]);
       break;
     case 'homework-problems':
-      if (!args[1]) { console.error('Usage: hydrooj-cli homework-problems <homework_id>'); process.exit(1); }
+      if (!args[1]) { throw new Error('Usage: hydrooj-cli homework-problems <homework_id>'); }
       await homeworkProblems(apiBase, requireToken(token), args[1]);
       break;
     case 'contest-detail':
-      if (!args[1]) { console.error('Usage: hydrooj-cli contest-detail <contest_id>'); process.exit(1); }
+      if (!args[1]) { throw new Error('Usage: hydrooj-cli contest-detail <contest_id>'); }
       await contestDetail(apiBase, requireToken(token), args[1]);
       break;
     case 'contest-problems':
-      if (!args[1]) { console.error('Usage: hydrooj-cli contest-problems <contest_id>'); process.exit(1); }
+      if (!args[1]) { throw new Error('Usage: hydrooj-cli contest-problems <contest_id>'); }
       await contestProblems(apiBase, requireToken(token), args[1]);
       break;
     case 'problem-upload': {
       const zipPath = args[1];
       if (!zipPath) {
-        console.error('Usage: hydrooj-cli problem-upload <path-to-problem.zip>');
-        process.exit(1);
+        throw new Error('Usage: hydrooj-cli problem-upload <path-to-problem.zip>');
       }
       const abs = path.resolve(zipPath);
       if (!fs.existsSync(abs)) {
-        console.error(`File not found: ${abs}`);
-        process.exit(1);
+        throw new Error(`File not found: ${abs}`);
       }
       const out = await apiMultipartRequest(apiBase, '/rest-api/problems', requireToken(token), abs);
-      console.log(JSON.stringify(out, null, 2));
+      renderJson(out);
       break;
     }
     case 'contest-create': {
       const payload = await readJsonWritePayloadAsync(args.slice(1));
       const out = await apiRequest(apiBase, '/rest-api/contests', 'POST', payload, requireToken(token));
-      console.log(JSON.stringify(out, null, 2));
+      renderJson(out);
       break;
     }
     case 'homework-create': {
       const payload = await readJsonWritePayloadAsync(args.slice(1));
       const out = await apiRequest(apiBase, '/rest-api/homework', 'POST', payload, requireToken(token));
-      console.log(JSON.stringify(out, null, 2));
+      renderJson(out);
       break;
     }
     case 'training-create': {
       const payload = await readJsonWritePayloadAsync(args.slice(1));
       const out = await apiRequest(apiBase, '/rest-api/trainings', 'POST', payload, requireToken(token));
-      console.log(JSON.stringify(out, null, 2));
+      renderJson(out);
       break;
     }
     default:
-      console.error(`Unknown command: ${cmd}`);
-      console.error('Run with help, -h, or --help for usage.');
-      process.exit(1);
+      throw new Error(`Unknown command: ${cmd}`);
   }
 }
 
 main().catch((err) => {
-  console.error('Error:', err?.message ?? err);
-  printAddonHintIfNeeded(err);
+  renderError(err);
   process.exit(1);
 });
