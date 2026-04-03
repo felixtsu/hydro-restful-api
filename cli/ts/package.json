@@ -1,6 +1,6 @@
 {
   "name": "hydrooj-cli",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "CLI client for the hydrooj-rest-api HydroOJ addon (read-only REST)",
   "license": "MIT",
   "author": "",

@@ -1,6 +1,6 @@
 {
   "name": "hydrooj-rest-api",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Read-only REST API addon for HydroOJ (/rest-api/*, JWT login)",
   "license": "MIT",
   "repository": {

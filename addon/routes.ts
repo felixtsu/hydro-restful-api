@@ -2,7 +2,8 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
-import { Context, Handler, LoginError, param, Types } from 'hydrooj';
+import { ObjectId } from 'mongodb';
+import { Context, Handler, LoginError } from 'hydrooj';
 
 function signToken(payload: Record<string, any>, secret: string, expiresInSec: number): string {
     const exp = Math.floor(Date.now() / 1000) + expiresInSec;
@@ -156,21 +157,36 @@ function trainingDagHasCycle(nodes: { _id: number; requireNids: number[] }[]): b
 const contestOnlyQuery = { rule: { $ne: 'homework' } };
 const homeworkQuery = { rule: 'homework' };
 
-// Helper: contest.get() expects numeric docId, but list returns _id.toString() (ObjectId).
-// Try ObjectId lookup first, then fall back to docId.
+// Helper: contest list returns `_id` as a Mongo ObjectId string, while legacy callers may
+// still pass numeric docIds. Match HydroOJ's own contest model API by using `ObjectId`
+// directly for 24-hex ids and falling back to numeric docId lookup otherwise.
 async function findContest(domainId: string, id: string) {
-    // Try ObjectId lookup
+    if (!id || id === 'undefined') return null;
+    const models = M();
     try {
-        const models = M();
-        const ObjectId = models.db.ObjectID || models.db.ObjectId;
-        const oid = new ObjectId(id);
-        const cdoc = await models.contest.getMulti(domainId, { _id: oid }).toArray();
-        if (cdoc?.length) return cdoc[0];
-    } catch { /* not an ObjectId, fall through */ }
-    // Fall back: try numeric docId
+        if (ObjectId.isValid(id) && /^[0-9a-fA-F]{24}$/.test(id)) {
+            const oid = new ObjectId(id);
+            const cdocs = await models.contest.getMulti(domainId, {
+                $or: [{ docId: oid }, { _id: oid }],
+            }).limit(2).toArray();
+            if (cdocs.length) {
+                return cdocs[0];
+            }
+        }
+    } catch {}
     if (/^\d+$/.test(id)) {
-        return await M().contest.get(domainId, id);
+        const docId = parseInt(id, 10);
+        try {
+            return await models.contest.get(domainId, docId);
+        } catch {}
     }
+    try {
+        const cdocs = await models.contest.getMulti(domainId, {}).toArray();
+        const cdoc = cdocs.find((item: any) =>
+            item?._id?.toString?.() === id || item?.docId?.toString?.() === id,
+        );
+        if (cdoc) return cdoc;
+    } catch {}
     return null;
 }
 
@@ -351,8 +367,8 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
     ctx.Route('rest_problems', '/rest-api/problems', RestProblemUploadHandler);
 
     class RestProblemDetailHandler extends Handler {
-        @param('id', Types.String)
-        async get(domainId: string, id: string) {
+        async get(args: { id: string }) {
+            const { id } = args;
             const auth = await requireAuth.call(this, jwtSecret);
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_PROBLEM')) return;
@@ -412,8 +428,8 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
     });
 
     class RestSubmissionDetailHandler extends Handler {
-        @param('id', Types.String)
-        async get(domainId: string, id: string) {
+        async get(args: { id: string }) {
+            const { id } = args;
             const auth = await requireAuth.call(this, jwtSecret);
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_RECORD')) return;
@@ -453,7 +469,7 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
             const total = await M().contest.count(auth.domainId, contestOnlyQuery);
             this.response.body = {
                 items: cdocs.map(c => ({
-                    id: c._id.toString(),
+                    id: c.docId?.toString?.() || c._id.toString(),
                     title: c.title,
                     description: c.description || '',
                     rule: c.rule,
@@ -579,7 +595,7 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
             const total = await M().contest.count(auth.domainId, homeworkQuery);
             this.response.body = {
                 items: cdocs.map(c => ({
-                    id: c._id.toString(),
+                    id: c.docId?.toString?.() || c._id.toString(),
                     title: c.title,
                     description: c.description || '',
                     rule: c.rule,
@@ -692,8 +708,8 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
     ctx.Route('rest_homework', '/rest-api/homework', RestHomeworkCreateHandler);
 
     class RestContestDetailHandler extends Handler {
-        @param('id', Types.String)
-        async get(domainId: string, id: string) {
+        async get(args: { id: string }) {
+            const { id } = args;
             const auth = await requireAuth.call(this, jwtSecret);
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_CONTEST')) return;
@@ -705,7 +721,7 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
                 return;
             }
             this.response.body = {
-                id: cdoc._id.toString(),
+                id: cdoc.docId?.toString?.() || cdoc._id.toString(),
                 title: cdoc.title,
                 description: cdoc.description || '',
                 rule: cdoc.rule,
@@ -719,8 +735,8 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
     ctx.Route('rest_contest_detail', '/rest-api/contests/:id', RestContestDetailHandler);
 
     class RestHomeworkDetailHandler extends Handler {
-        @param('id', Types.String)
-        async get(domainId: string, id: string) {
+        async get(args: { id: string }) {
+            const { id } = args;
             const auth = await requireAuth.call(this, jwtSecret);
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_HOMEWORK')) return;
@@ -732,7 +748,7 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
                 return;
             }
             this.response.body = {
-                id: cdoc._id.toString(),
+                id: cdoc.docId?.toString?.() || cdoc._id.toString(),
                 title: cdoc.title,
                 description: cdoc.description || '',
                 rule: cdoc.rule,
@@ -746,8 +762,8 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
     ctx.Route('rest_homework_detail', '/rest-api/homework/:id', RestHomeworkDetailHandler);
 
     class RestContestProblemsHandler extends Handler {
-        @param('id', Types.String)
-        async get(domainId: string, id: string) {
+        async get(args: { id: string }) {
+            const { id } = args;
             const auth = await requireAuth.call(this, jwtSecret);
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_CONTEST')) return;
@@ -764,8 +780,8 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
             );
             this.response.body = {
                 items: problems.filter(Boolean).map((p: any) => ({
-                    id: p.docId || p.pid,
-                    pid: p.pid,
+                    id: p.docId,
+                    pid: p.docId,
                     title: p.title,
                     difficulty: p.difficulty,
                     tag: p.tag || [],
@@ -776,8 +792,8 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
     ctx.Route('rest_contest_problems', '/rest-api/contests/:id/problems', RestContestProblemsHandler);
 
     class RestHomeworkProblemsHandler extends Handler {
-        @param('id', Types.String)
-        async get(domainId: string, id: string) {
+        async get(args: { id: string }) {
+            const { id } = args;
             const auth = await requireAuth.call(this, jwtSecret);
             if (!auth) return;
             if (!requirePerm.call(this, auth.udoc, 'PERM_VIEW_HOMEWORK')) return;
@@ -794,8 +810,8 @@ export function registerRestApiRoutes(ctx: Context, jwtSecret: string) {
             );
             this.response.body = {
                 items: problems.filter(Boolean).map((p: any) => ({
-                    id: p.docId || p.pid,
-                    pid: p.pid,
+                    id: p.docId,
+                    pid: p.docId,
                     title: p.title,
                     difficulty: p.difficulty,
                     tag: p.tag || [],

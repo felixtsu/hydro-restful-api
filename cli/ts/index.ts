@@ -70,6 +70,10 @@ function requireBaseUrl(baseUrl: string): string {
 function isLikelyMissingAddonOrMisconfigured(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   if (/HTTP 401|HTTP 403\b/.test(msg)) return false;
+  // If the error message indicates a specific resource not found from our JSON API,
+  // it means the addon IS loaded, just that the resource is missing.
+  if (/ — NOT_FOUND\b/.test(msg)) return false;
+
   if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|EAI_AGAIN|getaddrinfo/i.test(msg)) return true;
   if (/HTTP 404\b/.test(msg)) return true;
   if (/expected JSON/i.test(msg)) return true;
