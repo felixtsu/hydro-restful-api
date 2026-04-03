@@ -10,7 +10,7 @@ import * as http from 'http';
 import FormData from 'form-data';
 import { 
   setOutputMode, setPrettyJson, setQuiet, 
-  renderJson, renderError, printHuman,
+  renderJson, renderError, printHuman, printDiagnostic,
   normalizeProblemList, normalizeProblem,
   normalizeSubmissionList, normalizeSubmission,
   normalizeHomeworkList, normalizeHomework,
@@ -288,7 +288,7 @@ async function readAllStdin(): Promise<string> {
 
 async function readJsonWritePayloadAsync(argsAfterCmd: string[]): Promise<object> {
   if (!argsAfterCmd.length) {
-    throw new Error('Expected --json, --file, or --stdin as the first option after the command');
+    throw new Error('Expected --file, --stdin, or inline JSON string');
   }
   const mode = argsAfterCmd[0];
   if (mode === '--json') {
@@ -310,7 +310,13 @@ async function readJsonWritePayloadAsync(argsAfterCmd: string[]): Promise<object
     if (!raw.trim()) throw new Error('Empty stdin');
     return JSON.parse(raw) as object;
   }
-  throw new Error(`Expected --json, --file, or --stdin as the first option after the command; got ${mode}`);
+  
+  // If it's not a known flag, it might be the inline JSON string (since --json might be stripped by the global parser)
+  try {
+    return JSON.parse(mode) as object;
+  } catch (e) {
+    throw new Error(`Expected --file <path>, --stdin, or inline JSON string. Got: ${mode}`);
+  }
 }
 
 function apiMultipartRequest(
@@ -429,8 +435,8 @@ async function listProblems(baseUrl: string, token: string, args: any): Promise<
   if (outputMode === 'json') {
     renderJson(normalized);
   } else {
-    printHuman(`\nProblems (Total: ${normalized.total})`);
-    printHuman(`Page ${normalized.page}/${normalized.totalPages}\n`);
+    printDiagnostic(`\nProblems (Total: ${normalized.total})`);
+    printDiagnostic(`Page ${normalized.page}/${normalized.totalPages}\n`);
     for (const p of normalized.items) {
       printHuman(humanProblem(p));
     }
@@ -454,7 +460,7 @@ async function showStatus(baseUrl: string, token: string, id?: string): Promise<
     if (outputMode === 'json') {
       renderJson(normalized);
     } else {
-      printHuman('\nRecent Submissions');
+      printDiagnostic('\nRecent Submissions');
       for (const s of normalized.items) {
         printHuman(humanSubmissionSummary(s));
       }
@@ -476,7 +482,7 @@ async function listHomework(baseUrl: string, token: string): Promise<void> {
   if (outputMode === 'json') {
     renderJson(normalized);
   } else {
-    printHuman(`\nHomework (Total: ${normalized.total})`);
+    printDiagnostic(`\nHomework (Total: ${normalized.total})`);
     for (const c of normalized.items) {
       printHuman(humanContestSummary(c, 'Homework'));
     }
@@ -489,7 +495,7 @@ async function listContests(baseUrl: string, token: string): Promise<void> {
   if (outputMode === 'json') {
     renderJson(normalized);
   } else {
-    printHuman(`\nContests (Total: ${normalized.total})`);
+    printDiagnostic(`\nContests (Total: ${normalized.total})`);
     for (const c of normalized.items) {
       printHuman(humanContestSummary(c, 'Contest'));
     }
@@ -512,7 +518,7 @@ async function homeworkProblems(baseUrl: string, token: string, id: string): Pro
   if (outputMode === 'json') {
     renderJson(normalized);
   } else {
-    printHuman(`\nHomework problems (${normalized.items.length})`);
+    printDiagnostic(`\nHomework problems (${normalized.items.length})`);
     for (const p of normalized.items) {
       printHuman(`  [#${p.displayId || p.id}] ${p.title}`);
     }
@@ -535,7 +541,7 @@ async function contestProblems(baseUrl: string, token: string, id: string): Prom
   if (outputMode === 'json') {
     renderJson(normalized);
   } else {
-    printHuman(`\nContest problems (${normalized.items.length})`);
+    printDiagnostic(`\nContest problems (${normalized.items.length})`);
     for (const p of normalized.items) {
       printHuman(`  [#${p.displayId || p.id}] ${p.title}`);
     }

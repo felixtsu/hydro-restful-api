@@ -29,8 +29,14 @@ export function renderError(err: any) {
   }
 }
 
-export function printHuman(text: string) {
+export function printDiagnostic(text: string) {
   if (outputMode === 'human' && !quiet) {
+    process.stdout.write(text + '\n');
+  }
+}
+
+export function printHuman(text: string) {
+  if (outputMode === 'human') {
     process.stdout.write(text + '\n');
   }
 }
