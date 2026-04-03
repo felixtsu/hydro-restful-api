@@ -1,295 +1,137 @@
-# HydroOJ REST API — Specification
+# HydroOJ REST API - Project Specification
 
----
-
-## English
-
-### Overview
-
-This repository provides a HydroOJ addon that exposes **read-only** HTTP APIs under `/rest-api/`, plus `POST /rest-api/login` to obtain a JWT. A TypeScript CLI under `cli/ts/` can call these APIs. Code submission and contest or homework registration are out of scope; use the web UI or Hydro’s native mechanisms.
-
-### Architecture
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  HydroOJ Server                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  hydro-restful-api addon (`addon/`)                  │  │
-│  │  - `export function apply(ctx, config)` registers    │  │
-│  │    routes via `ctx.Route(...)`                       │  │
-│  │  - Uses Hydro’s model layer for data access          │  │
-│  │  - Runs inside Hydro’s Koa process; same port        │  │
-│  └──────────────────────────────────────────────────────┘  │
+│  HydroOJ Server (oj.cubicbird.com)                          │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │  hydrooj-rest-api addon (addon/)                     │   │
+│  │  - Registers REST routes via ctx.Route()             │   │
+│  │  - Uses ctx.model.* to access Hydro data              │   │
+│  │  - Runs inside Hydro's Koa process                    │   │
+│  │  - No separate port - uses Hydro's port              │   │
+│  └──────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────┘
                            ▲
-                           │ HTTP (`Authorization: Bearer <token>`)
+                           │ HTTP (Authorization: Bearer <token>)
                            │
 ┌──────────────────────────────────────────────────────────────┐
-│  CLI (`cli/ts/`)                                             │
-│  │  `index.ts` — TypeScript / Node client                  │  │
+│  CLI Clients (cli/)                                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │ cli/go/     │  │ cli/ts/     │  │ cli/python/ │        │
+│  │ main.go     │  │ index.ts    │  │ hydrooj_cli │        │
+│  │ (最终交付)   │  │ (备选)      │  │ (已有基础)  │        │
+│  └─────────────┘  └─────────────┘  └─────────────┘        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### Repository layout
-
-Source repository: **`github.com/felixtsu/hydro-restful-api`** (local clone directory name may differ).
+## Project Structure
 
 ```
-hydro-restful-api/
-├── addon/
-│   ├── package.json
-│   ├── index.ts              # Addon entry: `apply`, route registration (loaded by Hydro)
-│   └── routes.ts             # Route handlers (parallel module; entry is `index.ts`)
-├── cli/ts/
-│   ├── package.json          # npm package `hydrooj-cli`, bin `hydrooj-cli`
-│   ├── tsconfig.json
-│   ├── bin/hydrooj-cli.js    # Launcher → dist/
-│   ├── index.ts              # CLI source
-│   └── dist/                 # Build output (gitignored); created by `npm run build`
-├── scripts/
-│   └── test-rest-addon.sh
+hydrooj_rest_api/
+├── addon/                    # HydroOJ addon (server-side)
+│   ├── package.json         # npm package config
+│   └── index.ts             # Service + routes
+├── cli/                     # CLI clients (client-side)
+│   ├── go/
+│   │   └── main.go          # Go CLI (recommended for final delivery)
+│   ├── ts/
+│   │   └── index.ts         # TypeScript/Node CLI
+│   └── python/
+│       └── hydrooj_cli.py   # Python CLI
 ├── SPEC.md
 └── README.md
 ```
 
-### Deployment
+## Deployment
 
-**Server (addon)**
+### Server-side (HydroOJ addon)
 
-Standard installation (recommended):
-```bash
-# In your HydroOJ project directory
-npm install hydrooj-rest-api
-# Or via HydroOJ CLI
-hydrooj addon add hydrooj-rest-api
-```
-
-Manual / Development:
-1. Copy `addon/` to the HydroOJ host or use `npm link`.
-2. Set `JWT_SECRET` to a strong, random value.
-3. Restart HydroOJ.
-
-**CLI**
+1. Copy `addon/` folder to HydroOJ server
+2. Place in HydroOJ's addons directory or link via npm
+3. Set `JWT_SECRET` environment variable
+4. Restart HydroOJ
 
 ```bash
-npm install -g hydrooj-cli   # after publish; or: cd cli/ts && npm run build && npm link
-hydrooj-cli login
-hydrooj-cli help
+# Example: link as npm package
+cd /path/to/hydrooj
+npm link /path/to/hydrooj_rest_api/addon
+# Or git clone directly to addons folder
 ```
 
-`help` also documents `homework-detail`, `homework-problems`, `contest-detail`, and `contest-problems` (each takes an id).
+### Client-side (CLI)
 
-### API
+#### Go CLI (Recommended)
+```bash
+cd cli/go
+go build -o hydrooj main.go
+./hydrooj login
+./hydrooj list
+```
 
-All routes are under **`/rest-api/`** (not `/api/`, which is used by Hydro’s built-in `/api/:op` handler).
+#### Python CLI
+```bash
+python3 cli/python/hydrooj_cli.py login
+python3 cli/python/hydrooj_cli.py list
+```
 
-Except for login, authenticated routes use **GET only** and are read-only. There are no REST endpoints here for submitting code or registering for contests or homework.
+#### TypeScript CLI
+```bash
+cd cli/ts
+npx ts-node index.ts login
+```
 
-#### Authentication
+## API Endpoints
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/rest-api/login` | Public | Returns JWT (JSON body: `{username,password}`) |
+All endpoints mount at `/api/` on the HydroOJ server.
 
-#### Problems
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/rest-api/problems?page=1&pageSize=20` | Bearer | List problems |
-| GET | `/rest-api/problems/:id` | Bearer | Problem details |
-
-The problems list also accepts optional filters: **`tag`**, **`difficulty`**, **`keyword`** (same query string).
-
-#### Submissions
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/rest-api/submissions?page=1&pageSize=20` | Bearer | List submissions |
-| GET | `/rest-api/submissions/:id` | Bearer | Submission details |
-
-#### Homework vs contests (Hydro)
-
-Hydro stores both in the contest collection: documents with **`rule: "homework"`** are homework; any other `rule` is treated as a contest for listing under `/rest-api/contests`.
-
-#### Homework
+### Authentication
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/rest-api/homework?page=1&pageSize=20` | Bearer | List homework |
-| GET | `/rest-api/homework/:id` | Bearer | Homework details |
-| GET | `/rest-api/homework/:id/problems` | Bearer | Homework problems |
+| GET | `/api/login?username=X&password=Y` | Public | Login, returns JWT token |
 
-#### Contests (excluding homework)
+### Problems
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/rest-api/contests?page=1&pageSize=20` | Bearer | List contests (`rule` ≠ `homework`) |
-| GET | `/rest-api/contests/:id` | Bearer | Contest details |
-| GET | `/rest-api/contests/:id/problems` | Bearer | Contest problems |
+| GET | `/api/problems?page=1&pageSize=20` | Bearer | List problems |
+| GET | `/api/problems/:id` | Bearer | Problem details |
 
-### Using the token after login
+### Submissions
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/submit` | Bearer | Submit code |
+| GET | `/api/submissions?page=1` | Bearer | List submissions |
+| GET | `/api/submissions/:id` | Bearer | Submission details |
+
+### Contests
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/contests` | Bearer | List contests |
+| GET | `/api/contests/:id` | Bearer | Contest details |
+| GET | `/api/contests/:id/problems` | Bearer | Contest problems |
+| POST | `/api/contests/:id/register` | Bearer | Register for contest |
+
+## Authentication
+
+After login, include the JWT token in requests:
 
 ```
 Authorization: Bearer <token>
 ```
 
-### Environment variables
+## Environment Variables
 
-**Server (addon)**
-
-| Variable | Description |
-|----------|-------------|
-| `JWT_SECRET` | Secret used to sign JWTs. **Use a strong random value** on any shared or production instance. |
-
-**CLI**
-
+### Server (addon)
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HYDRO_API_URL` | `http://localhost:3000` | Base URL of the HydroOJ site (scheme + host + port). |
+| JWT_SECRET | (dev default) | JWT signing secret |
 
----
-
-## 中文
-
-### 概述
-
-本仓库包含一个 HydroOJ 插件，在 **`/rest-api/`** 下提供**只读** HTTP 接口，并通过 `POST /rest-api/login` 签发 JWT。`cli/ts/` 中的 TypeScript 命令行可作为调用示例或客户端。代码提交、比赛与作业报名不在此 REST 范围内，请使用 Web 端或 Hydro 原生流程。
-
-### 架构
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  HydroOJ 服务器                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  hydro-restful-api 插件（`addon/`）                   │  │
-│  │  - 通过 `export function apply(ctx, config)` 与      │  │
-│  │    `ctx.Route(...)` 注册路由                         │  │
-│  │  - 经 Hydro 模型层访问数据                           │  │
-│  │  - 运行在 Hydro 的 Koa 进程内，共用站点端口          │  │
-│  └──────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-                           ▲
-                           │ HTTP（`Authorization: Bearer <token>`）
-                           │
-┌──────────────────────────────────────────────────────────────┐
-│  CLI（`cli/ts/`）                                            │
-│  │  `index.ts` — TypeScript / Node 客户端                  │  │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### 仓库结构
-
-源码仓库：**`github.com/felixtsu/hydro-restful-api`**（本地克隆目录名可不同）。
-
-```
-hydro-restful-api/
-├── addon/
-│   ├── package.json
-│   ├── index.ts              # 插件入口：`apply`、路由注册（由 Hydro 加载）
-│   └── routes.ts             # 路由处理实现（与 `index.ts` 并列；入口为 `index.ts`）
-├── cli/ts/
-│   ├── package.json          # npm 包 `hydrooj-cli`，命令 `hydrooj-cli`
-│   ├── tsconfig.json
-│   ├── bin/hydrooj-cli.js
-│   ├── index.ts
-│   └── dist/                 # `npm run build` 生成（gitignore）
-├── scripts/
-│   └── test-rest-addon.sh
-├── SPEC.md
-└── README.md
-```
-
-### 部署
-
-**服务端（插件）**
-
-标准安装（推荐）：
-```bash
-# 在你的 HydroOJ 项目目录下
-npm install hydrooj-rest-api
-# 或通过 HydroOJ 命令行工具
-hydrooj addon add hydrooj-rest-api
-```
-
-手动 / 开发安装：
-1. 将 `addon/` 部署到 HydroOJ 所在环境，按常规方式安装或链接插件。
-2. 将 `JWT_SECRET` 设为足够长的随机密钥。
-3. 重启 HydroOJ。
-
-**命令行**
-
-```bash
-npm install -g hydrooj-cli   # 发布后；或源码：cd cli/ts && npm run build && npm link
-hydrooj-cli login
-hydrooj-cli help
-```
-
-`help` 中亦说明 `homework-detail`、`homework-problems`、`contest-detail`、`contest-problems`（均需传入 id）。
-
-### 接口说明
-
-所有接口挂载在 **`/rest-api/`** 下（不使用 `/api/`，以免与 Hydro 内置的 `/api/:op` 冲突）。
-
-除登录外，需认证的接口均为 **GET** 且只读。本插件不提供通过 REST 提交代码或报名比赛/作业的接口。
-
-#### 认证
-
-| 方法 | 路径 | 鉴权 | 说明 |
-|------|------|------|------|
-| POST | `/rest-api/login` | 无需 | 返回 JWT（JSON body: `{username,password}`） |
-
-#### 题目
-
-| 方法 | 路径 | 鉴权 | 说明 |
-|------|------|------|------|
-| GET | `/rest-api/problems?page=1&pageSize=20` | Bearer | 题目列表 |
-| GET | `/rest-api/problems/:id` | Bearer | 题目详情 |
-
-题目列表还可选查询参数 **`tag`**、**`difficulty`**、**`keyword`**（与分页参数同一 query）。
-
-#### 提交记录
-
-| 方法 | 路径 | 鉴权 | 说明 |
-|------|------|------|------|
-| GET | `/rest-api/submissions?page=1&pageSize=20` | Bearer | 提交列表 |
-| GET | `/rest-api/submissions/:id` | Bearer | 提交详情 |
-
-#### 作业与比赛（Hydro 语义）
-
-Hydro 将二者存在同一套「比赛」文档中：字段 **`rule: "homework"`** 表示作业；其余 `rule` 在 `/rest-api/contests` 下列为比赛。
-
-#### 作业
-
-| 方法 | 路径 | 鉴权 | 说明 |
-|------|------|------|------|
-| GET | `/rest-api/homework?page=1&pageSize=20` | Bearer | 作业列表 |
-| GET | `/rest-api/homework/:id` | Bearer | 作业详情 |
-| GET | `/rest-api/homework/:id/problems` | Bearer | 作业题目 |
-
-#### 比赛（不含 homework 规则）
-
-| 方法 | 路径 | 鉴权 | 说明 |
-|------|------|------|------|
-| GET | `/rest-api/contests?page=1&pageSize=20` | Bearer | 比赛列表（`rule` ≠ `homework`） |
-| GET | `/rest-api/contests/:id` | Bearer | 比赛详情 |
-| GET | `/rest-api/contests/:id/problems` | Bearer | 比赛题目 |
-
-### 登录后携带令牌
-
-```
-Authorization: Bearer <token>
-```
-
-### 环境变量
-
-**服务端（插件）**
-
-| 变量 | 说明 |
-|------|------|
-| `JWT_SECRET` | 用于签发 JWT 的密钥。**在对外或生产环境中必须使用高强度随机值。** |
-
-**CLI**
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `HYDRO_API_URL` | `http://localhost:3000` | HydroOJ 站点根地址（协议 + 主机 + 端口）。 |
+### Client (CLI)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| HYDRO_API_URL | http://localhost:3000 | HydroOJ API base URL |

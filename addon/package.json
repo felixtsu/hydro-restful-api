@@ -1,36 +1,13 @@
 {
   "name": "hydrooj-rest-api",
-  "version": "1.1.0",
-  "description": "Read-only REST API addon for HydroOJ (/rest-api/*, JWT login)",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/felixtsu/hydro-restful-api.git",
-    "directory": "addon"
-  },
-  "bugs": {
-    "url": "https://github.com/felixtsu/hydro-restful-api/issues"
-  },
-  "homepage": "https://github.com/felixtsu/hydro-restful-api#readme",
-  "keywords": [
-    "hydrooj",
-    "hydro",
-    "oj",
-    "addon",
-    "plugin",
-    "rest-api"
-  ],
+  "version": "1.0.0",
+  "description": "REST API addon for HydroOJ",
   "main": "index.ts",
-  "files": [
-    "index.ts",
-    "routes.ts",
-    "package.json"
-  ],
   "hydro": {
-    "builtin": true,
+    "builtin": false,
     "priority": 50
   },
   "peerDependencies": {
-    "hydrooj": "*"
+    "hydrooj": ">=5.0.0"
   }
 }
